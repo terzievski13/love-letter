@@ -212,40 +212,8 @@ const ThreeScene = (() => {
       scene.add(b);
     }
 
-    // Grass blades on top — instanced
-    // Pre-collect valid positions so no InstancedMesh slots are left at identity/origin
-    const bladeGeo = new THREE.PlaneGeometry(0.06, 0.25);
-    bladeGeo.translate(0, 0.125, 0);
-    const bladeMat = new THREE.MeshStandardMaterial({
-      color: 0x9a9448, side: THREE.DoubleSide, roughness: 1
-    });
-    const bladeData = [];
-    for (let i = 0; i < 900; i++) {
-      const x = (Math.random() - 0.5) * 24;
-      const z = -7 + Math.random() * 6;
-      const front = -1.5 + (x * x) * 0.005;
-      if (z > front) continue;
-      bladeData.push([x, z, Math.random() * Math.PI, 0.7 + Math.random() * 0.6]);
-    }
-    const grass = new THREE.InstancedMesh(bladeGeo, bladeMat, bladeData.length);
-    const dummy = new THREE.Object3D();
-    bladeData.forEach(([x, z, ry, s], idx) => {
-      dummy.position.set(x, -0.05, z);
-      dummy.rotation.y = ry;
-      dummy.scale.setScalar(s);
-      dummy.updateMatrix();
-      grass.setMatrixAt(idx, dummy.matrix);
-    });
-    grass.instanceMatrix.needsUpdate = true;
-    scene.add(grass);
-
-    // Tiny flowers scattered
-    const flowerMat = new THREE.MeshStandardMaterial({ color: 0xeaa05a, roughness: 0.9 });
-    for (let i = 0; i < 18; i++) {
-      const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), flowerMat);
-      f.position.set((Math.random() - 0.5) * 18, 0.05, -6 + Math.random() * 5);
-      scene.add(f);
-    }
+    // Grass blades removed — thin PlaneGeometry blades look like floating
+    // matchsticks from this camera angle. The platform color reads as ground.
   }
 
   function buildFoliage() {
@@ -476,9 +444,9 @@ const ThreeScene = (() => {
       const e = camAnim.stage === 'inside' ? easeInOutQuad(k) : easeInOutCubic(k);
       const p = new THREE.Vector3().lerpVectors(camAnim.from, camAnim.to, e);
       if (camAnim.stage === 'inside') {
-        // Clockwise sweep: camera starts at a small CCW offset that winds down to 0,
-        // creating a gentle clockwise arc around the mailbox as it zooms in
-        const sweep = (1 - e) * 0.32;
+        // Bell-curve arc: sin(k*π) is 0 at both start and end, peaks at midpoint.
+        // This creates a gentle orbital sweep with no jump on frame 0.
+        const sweep = Math.sin(k * Math.PI) * 0.22;
         const lt = camAnim.lookTo;
         const dx = p.x - lt.x, dz = p.z - lt.z;
         const cs = Math.cos(sweep), sn = Math.sin(sweep);
