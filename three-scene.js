@@ -145,20 +145,20 @@ const ThreeScene = (() => {
     const ctx = c.getContext("2d");
     // gradient runs top (far) to bottom (near shore)
     const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0.00, "#7a5030"); // deep far horizon
-    g.addColorStop(0.35, "#b07040"); // warm amber mid-lake
-    g.addColorStop(0.75, "#c8884a"); // bright golden near shore
-    g.addColorStop(1.00, "#b07858"); // muted warm at edge
+    g.addColorStop(0.00, "#2a3a52"); // deep slate-blue far
+    g.addColorStop(0.40, "#4a6a82"); // calm lake blue
+    g.addColorStop(0.78, "#6a8ea4"); // lighter mid-blue
+    g.addColorStop(1.00, "#7a9eac"); // near shore blue
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
-    // sun glitter streak — centred, warm gold
+    // warm sun glitter streak on the water surface
     const sg = ctx.createRadialGradient(128, 80, 6, 128, 80, 90);
-    sg.addColorStop(0, "rgba(255,220,140,0.75)");
+    sg.addColorStop(0, "rgba(255,220,140,0.55)");
     sg.addColorStop(1, "rgba(255,220,140,0)");
     ctx.fillStyle = sg;
     ctx.fillRect(0, 0, 256, 256);
     // soft ripple lines
-    ctx.strokeStyle = "rgba(255,230,180,0.15)";
+    ctx.strokeStyle = "rgba(200,230,255,0.18)";
     ctx.lineWidth = 1;
     for (let i = 0; i < 60; i++) {
       const wy = Math.random() * 256;
@@ -195,18 +195,19 @@ const ThreeScene = (() => {
   function buildMountains() {
     // Three depth layers of low-poly peaks — closer ones dark, far ones warm-hazy
     // Fog (30–200) provides natural atmospheric thinning on the far peaks
+    // r is kept to ~¼ of h so peaks look narrow and alpine, not pyramidal
     const peaks = [
       // front layer — darkest, least fogged
-      { x: -22, z:  -68, h: 28, r: 22, color: 0x7a4828 },
-      { x:  16, z:  -65, h: 22, r: 18, color: 0x7a5030 },
+      { x: -18, z:  -65, h: 30, r:  9, color: 0x7a4828 },
+      { x:  15, z:  -62, h: 24, r:  7, color: 0x7a5030 },
       // middle layer
-      { x: -40, z:  -90, h: 50, r: 36, color: 0x9a5838 },
-      { x:   4, z:  -84, h: 68, r: 46, color: 0x8a4830 }, // dominant peak
-      { x:  40, z:  -95, h: 46, r: 33, color: 0x9a6040 },
-      // back layer — lightest, most fogged → warmest look
-      { x: -60, z: -118, h: 40, r: 30, color: 0xb87050 },
-      { x:  22, z: -110, h: 54, r: 40, color: 0xaa6848 },
-      { x:  65, z: -125, h: 34, r: 26, color: 0xbe8060 },
+      { x: -35, z:  -90, h: 56, r: 16, color: 0x9a5838 },
+      { x:   4, z:  -86, h: 72, r: 20, color: 0x8a4830 }, // dominant peak
+      { x:  36, z:  -96, h: 50, r: 15, color: 0x9a6040 },
+      // back layer — lightest, most fogged
+      { x: -55, z: -118, h: 44, r: 14, color: 0xb87050 },
+      { x:  20, z: -112, h: 58, r: 18, color: 0xaa6848 },
+      { x:  60, z: -126, h: 38, r: 12, color: 0xbe8060 },
     ];
     peaks.forEach(({ x, z, h, r, color }) => {
       const cone = new THREE.Mesh(
