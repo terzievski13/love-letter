@@ -1,7 +1,8 @@
 # Letters, From Me
 
 A personal one-page website for my girlfriend. A 3D interactive mailbox 
-where I leave her letters over time. To be hosted on Vercel.
+where I leave her letters over time. Hosted on Vercel at:
+https://love-letter-henna.vercel.app
 
 ## Stack
 
@@ -9,38 +10,82 @@ where I leave her letters over time. To be hosted on Vercel.
 - React 18 + ReactDOM (UMD, browser-loaded via unpkg)
 - Babel Standalone 7.29 (JSX transpiled in-browser, no bundler)
 - Plain CSS in index.html (no Tailwind)
-- Deployed to Vercel
+- GitHub → Vercel auto-deploy (push to main = live)
 
 ## Working features (DO NOT modify unless I ask)
 
-- Initial 3/4 camera view with sunset sky
-- Click mailbox → camera zooms in, mailbox opens, shows letter spread
-- "Pick a letter" view: fanned envelope spread inside mailbox
-- Click envelope → letter unfolds with gradual handwritten text reveal
-- Back/close buttons with zoom-out animation
-- Handwritten font on letters
-- Typography in titles
+These are confirmed good. Leave them alone.
 
-## Currently broken / needs work (priority order)
+### Letter flow (perfect — do not touch)
+- "Pick a letter" view: fanned envelope spread inside mailbox, each 
+  envelope individually clickable, wax seal, handwritten labels
+- Click envelope → letter unfolds, handwritten text appears line by line
+- "Back to mailbox" button closes letter and returns to spread
+- Handwritten font (Caveat), beautiful Fraunces serif in titles
 
-1. **Landscape is bad.** Floating grass strips, flat green plane. 
-   Want low-poly cozy coastal sunset, "A Short Hike" / "Spiritfarer" mood.
-2. **Mailbox opening animation feels off.** Pivot point or easing 
-   issue — needs to feel natural and satisfying.
-3. **Mailbox model is basic.** Proportions and material need work, 
-   want a warmer wooden feel.
+### Camera & navigation (confirmed working)
+- Initial 3/4 outside view: camera at [4.6, 2.6, 6.2] looking at [0, 1.7, 0]
+- Click mailbox → slow steady zoom in, gentle clockwise arc mid-journey, 
+  no sudden jump on first frame (fixed with sin(k*π) bell-curve sweep)
+- Zoom back out with "back outside" button
+- 4-stage state machine: outside → arriving → inside → reading
+
+### Mailbox door animation (confirmed working)
+- Spring simulation (stiffness 0.045, damping 0.76) replaces the old lerp
+- Gives a subtle overshoot/settle — feels like a real lightweight door
+
+### 3D scene basics (confirmed working)
+- Sunset sky gradient on backside sphere with sprite clouds
+- Solid olive-green ground (BoxGeometry, top at y=0) — mailbox base sits 
+  on it correctly
+- Visible shore edge at z=-10 (front face of the ground box)
+- Blue lake behind the shore edge with warm sun glitter streak
+- Low-poly mountains in the background (5-sided cones, 3 depth layers)
+- Fog: starts at 30 units, dense at 200 — gives atmospheric mountain haze
+- Warm directional sun light + hemisphere ambient + rim light
+
+## Currently needs work (priority order)
+
+1. **Mountains** — visible but only on the right side of the frame.
+   Need to be spread across the full background width and feel like they 
+   sit behind the lake, not on top of it. Composition reference: bench 
+   by Lake Lucerne photo (warm-toned version). Big dramatic alpine peaks.
+
+2. **Landscape details** — once mountains are right, add a tree to one 
+   side (not centred). Possibly gentle slope/hill on the ground. No grass 
+   blades (tried, looked terrible from this camera angle).
+
+3. **Mailbox model** — keep red American tube shape. Proportions and 
+   material could be improved but not urgent.
+
+## Landscape design decisions (confirmed)
+
+- Scene mood: warm sunset, NOT "A Short Hike" style (too game-y). 
+  Composition reference: bench by Lake Lucerne photo.
+- Ground fills more of the frame than in the reference photo (user wants this)
+- Mailbox stays centred
+- Warm sky palette: top #f2a06a → #fbcf9a → #fde6cd → horizon #f6c89a
+- Ground: olive-golden #8a9040
+- Water: blue (#2a3a52 deep → #7a9eac near shore), warm glitter streak
+- Mountains: dark amber near (#7a4828) → lighter warm far (#be8060), 
+  atmospheric fog blends them to peach at distance
+- No tree yet (next session)
+- Grass blades removed — thin PlaneGeometry looks like floating 
+  matchsticks from this camera angle at any density
 
 ## Version control
 
-- This project uses Git, hosted on GitHub
+- GitHub repo: https://github.com/terzievski13/love-letter
 - Deployed to Vercel via GitHub auto-deploy
 - Commit at meaningful checkpoints with descriptive messages
 - Before big refactors, commit current working state first as a safety net
 
-## Future ideas (don't build yet, just for context)
+## Future ideas (don't build yet)
 
 - Add new letters over time without rebuilding
-- Maybe small details: fireflies, ambient sound, wind in grass
+- Tree to one side of the mailbox (bare winter style or with round foliage)
+- Fireflies, ambient sound, wind effect
+- Better mailbox model proportions
 
 ## How I work
 
