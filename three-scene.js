@@ -48,7 +48,7 @@ const ThreeScene = (() => {
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xfbcf9a); // fallback if sky fails
-    scene.fog = new THREE.Fog(0xf6c89a, 25, 80);
+    scene.fog = new THREE.Fog(0xf6c89a, 30, 200);
 
     camera = new THREE.PerspectiveCamera(38, initW / initH, 0.1, 200);
     camera.position.set(...CAM.outside.pos);
@@ -58,9 +58,9 @@ const ThreeScene = (() => {
     pointer = new THREE.Vector2();
 
     buildSky();
-    buildSea();
-    buildCliff();
-    buildFoliage();
+    buildWater();
+    buildGround();
+    buildMountains();
     buildMailbox();
     buildLights();
 
@@ -138,66 +138,84 @@ const ThreeScene = (() => {
     return t;
   }
 
-  function buildSea() {
-    // Sea: textured plane with painted gradient + sun glitter
+  function buildWater() {
+    // Warm sunset lake — gradient canvas texture, starts behind the shore edge at z=-10
     const c = document.createElement("canvas");
     c.width = 256; c.height = 256;
     const ctx = c.getContext("2d");
+    // gradient runs top (far) to bottom (near shore)
     const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, "#5a7a96");   // far
-    g.addColorStop(0.5, "#7a92a8");
-    g.addColorStop(1, "#c8a888");   // near (warm reflection)
+    g.addColorStop(0.00, "#7a5030"); // deep far horizon
+    g.addColorStop(0.35, "#b07040"); // warm amber mid-lake
+    g.addColorStop(0.75, "#c8884a"); // bright golden near shore
+    g.addColorStop(1.00, "#b07858"); // muted warm at edge
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
-    // sun glitter band
-    const sg = ctx.createRadialGradient(180, 60, 8, 180, 60, 80);
-    sg.addColorStop(0, "rgba(255,228,180,0.85)");
-    sg.addColorStop(1, "rgba(255,228,180,0)");
+    // sun glitter streak — centred, warm gold
+    const sg = ctx.createRadialGradient(128, 80, 6, 128, 80, 90);
+    sg.addColorStop(0, "rgba(255,220,140,0.75)");
+    sg.addColorStop(1, "rgba(255,220,140,0)");
     ctx.fillStyle = sg;
     ctx.fillRect(0, 0, 256, 256);
-    // ripple lines
-    ctx.strokeStyle = "rgba(255,240,210,0.18)";
+    // soft ripple lines
+    ctx.strokeStyle = "rgba(255,230,180,0.15)";
     ctx.lineWidth = 1;
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 60; i++) {
+      const wy = Math.random() * 256;
       ctx.beginPath();
-      const y = Math.random() * 256;
-      ctx.moveTo(Math.random() * 256, y);
-      ctx.lineTo(Math.random() * 256 + 30, y);
+      ctx.moveTo(Math.random() * 256, wy);
+      ctx.lineTo(Math.random() * 256 + 40, wy);
       ctx.stroke();
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const geo = new THREE.PlaneGeometry(400, 400);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, fog: true });
-    const sea = new THREE.Mesh(geo, mat);
-    sea.rotation.x = -Math.PI / 2;
-    sea.position.set(0, -8, -40);
-    scene.add(sea);
-    scene.userData.sea = sea;
+    // Large plane centered well behind the shore so it fills the background
+    const water = new THREE.Mesh(
+      new THREE.PlaneGeometry(600, 400),
+      new THREE.MeshBasicMaterial({ map: tex, fog: true })
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(0, -0.05, -100); // slightly below ground level, far back
+    scene.add(water);
   }
 
-  function buildCliff() {
-    // Flat ground plane at y=0, matching the mailbox base level
+  function buildGround() {
+    // Box geometry so the front face at z=-10 is the visible shore edge
+    // Top surface at y=0 matches the mailbox base plate exactly
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200),
+      new THREE.BoxGeometry(200, 0.5, 100),
       new THREE.MeshStandardMaterial({ color: 0x8a9040, roughness: 0.95, metalness: 0 })
     );
-    ground.rotation.x = -Math.PI / 2;
+    // position: top at y=0, front face (shore edge) at z=-10, back edge at z=90
+    ground.position.set(0, -0.25, 40);
     ground.receiveShadow = true;
     scene.add(ground);
   }
 
-  function buildFoliage() {
-    // a single small bush behind the mailbox for depth
-    const bushMat = new THREE.MeshStandardMaterial({ color: 0x6e8a4a, roughness: 1 });
-    const bush = new THREE.Group();
-    for (let i = 0; i < 5; i++) {
-      const s = new THREE.Mesh(new THREE.SphereGeometry(0.4 + Math.random() * 0.2, 8, 6), bushMat);
-      s.position.set((Math.random() - 0.5) * 0.7, 0.3 + Math.random() * 0.2, (Math.random() - 0.5) * 0.6);
-      bush.add(s);
-    }
-    bush.position.set(-2.2, 0, -3);
-    scene.add(bush);
+  function buildMountains() {
+    // Three depth layers of low-poly peaks — closer ones dark, far ones warm-hazy
+    // Fog (30–200) provides natural atmospheric thinning on the far peaks
+    const peaks = [
+      // front layer — darkest, least fogged
+      { x: -22, z:  -68, h: 28, r: 22, color: 0x7a4828 },
+      { x:  16, z:  -65, h: 22, r: 18, color: 0x7a5030 },
+      // middle layer
+      { x: -40, z:  -90, h: 50, r: 36, color: 0x9a5838 },
+      { x:   4, z:  -84, h: 68, r: 46, color: 0x8a4830 }, // dominant peak
+      { x:  40, z:  -95, h: 46, r: 33, color: 0x9a6040 },
+      // back layer — lightest, most fogged → warmest look
+      { x: -60, z: -118, h: 40, r: 30, color: 0xb87050 },
+      { x:  22, z: -110, h: 54, r: 40, color: 0xaa6848 },
+      { x:  65, z: -125, h: 34, r: 26, color: 0xbe8060 },
+    ];
+    peaks.forEach(({ x, z, h, r, color }) => {
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(r, h, 5, 1), // 5-sided = angular low-poly alpine shape
+        new THREE.MeshLambertMaterial({ color, fog: true })
+      );
+      cone.position.set(x, h / 2, z); // base at y=0, rises upward
+      scene.add(cone);
+    });
   }
 
   function buildMailbox() {
