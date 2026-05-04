@@ -177,43 +177,14 @@ const ThreeScene = (() => {
   }
 
   function buildCliff() {
-    // Grass platform — irregular front edge
-    const platShape = new THREE.Shape();
-    platShape.moveTo(-12, -8);
-    platShape.lineTo(12, -8);
-    platShape.lineTo(13, -3);
-    platShape.bezierCurveTo(10, -1.5, 6, -0.5, 2, -0.7);
-    platShape.bezierCurveTo(-2, -0.9, -6, -1.8, -10, -2.2);
-    platShape.lineTo(-13, -3);
-    platShape.closePath();
-
-    const platGeo = new THREE.ExtrudeGeometry(platShape, {
-      depth: 6, bevelEnabled: true, bevelThickness: 0.15, bevelSize: 0.18, bevelSegments: 2
-    });
-    platGeo.rotateX(-Math.PI / 2);
-
-    const grassMat = new THREE.MeshStandardMaterial({
-      color: 0x8a9040, roughness: 0.95, metalness: 0
-    });
-    const platform = new THREE.Mesh(platGeo, grassMat);
-    platform.position.y = -6;
-    platform.receiveShadow = true;
-    scene.add(platform);
-
-    // Rocky cliff face (a few angled boxes underneath)
-    const rockMat = new THREE.MeshStandardMaterial({ color: 0xa88366, roughness: 1, metalness: 0 });
-    for (let i = -3; i <= 3; i++) {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(4, 8, 3), rockMat);
-      b.position.set(i * 3.5, -8, -1 + Math.random() * 0.5);
-      b.rotation.z = (Math.random() - 0.5) * 0.2;
-      b.rotation.y = (Math.random() - 0.5) * 0.3;
-      b.castShadow = true;
-      b.receiveShadow = true;
-      scene.add(b);
-    }
-
-    // Grass blades removed — thin PlaneGeometry blades look like floating
-    // matchsticks from this camera angle. The platform color reads as ground.
+    // Flat ground plane at y=0, matching the mailbox base level
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      new THREE.MeshStandardMaterial({ color: 0x8a9040, roughness: 0.95, metalness: 0 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
   }
 
   function buildFoliage() {
