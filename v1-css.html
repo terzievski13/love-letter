@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>letters, from me</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&display=swap">
+
+<style>
+  :root {
+    --ink: #3a2820;
+    --warm: #fbe9d2;
+    --warm-deep: #2a1a14;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: #2a1a14;
+    overflow: hidden;
+    font-family: Fraunces, "Times New Roman", serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  #app, .root {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .scene-wrap {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+  .scene {
+    width: 100%;
+    height: 100%;
+    display: block;
+    will-change: transform;
+  }
+  .vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(20,12,8,0.85) 80%);
+    pointer-events: none;
+    transition: opacity 1.0s ease;
+  }
+
+  .interior {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+    transition: opacity 0.6s ease;
+    animation: fadeIn 0.8s ease;
+  }
+  .int-glow {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 55%, rgba(251,225,191,0.18) 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 55%, rgba(40,20,12,0.4) 60%, rgba(20,10,6,0.92) 100%);
+    pointer-events: none;
+  }
+
+  .letter-stage {
+    position: absolute;
+    inset: 0;
+    perspective: 1400px;
+    perspective-origin: 50% 30%;
+  }
+
+  .back-btn {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,243,230,0.25);
+    background: rgba(20,10,6,0.55);
+    color: #fff3e6;
+    font-family: Fraunces, serif;
+    font-size: 14px;
+    font-style: italic;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    transition: background 0.2s;
+  }
+  .back-btn:hover { background: rgba(40,20,12,0.85); }
+
+  .outside-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 44px;
+    transform: translateX(-50%);
+    color: #3a2820;
+    font-family: Caveat, cursive;
+    font-size: 22px;
+    text-align: center;
+    opacity: 0.8;
+    animation: bob 2.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .hint-arrow {
+    font-size: 28px;
+    margin-bottom: -4px;
+    opacity: 0.7;
+  }
+
+  .inside-hint {
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    transform: translateX(-50%);
+    color: #fff3e6;
+    font-family: Caveat, cursive;
+    font-size: 26px;
+    opacity: 0.7;
+    letter-spacing: 1px;
+    pointer-events: none;
+    animation: bobSm 3s ease-in-out infinite;
+    z-index: 5;
+  }
+
+  .title {
+    position: absolute;
+    top: 36px;
+    left: 0; right: 0;
+    text-align: center;
+    pointer-events: none;
+  }
+  .title-sub {
+    font-family: Caveat, cursive;
+    color: #7a4a32;
+    font-size: 18px;
+    opacity: 0.85;
+    letter-spacing: 0.5px;
+  }
+  .title-main {
+    font-family: Fraunces, serif;
+    font-style: italic;
+    font-size: 36px;
+    color: #2a1a14;
+    margin-top: -2px;
+    letter-spacing: -0.5px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes bob {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50%     { transform: translateX(-50%) translateY(-6px); }
+  }
+  @keyframes bobSm {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50%     { transform: translateX(-50%) translateY(-4px); }
+  }
+
+  /* mobile */
+  @media (max-width: 720px) {
+    .title-main { font-size: 26px; }
+    .title-sub { font-size: 15px; }
+  }
+
+  /* tweaks panel needs */
+  .tw-panel { font-family: Fraunces, serif; }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="letters.jsx"></script>
+  <script type="text/babel" src="scene.jsx"></script>
+  <script type="text/babel" src="envelope.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+  <script type="text/babel" src="tweaks.jsx"></script>
+</body>
+</html>
