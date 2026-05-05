@@ -17,9 +17,12 @@ const ThreeScene = (() => {
   // camera waypoints (target positions / look-ats)
   // Mailbox group is rotated -0.55 rad on Y so opening points roughly toward (+X, +Z).
   // Outside cam sees it 3/4. Inside cam ends up just above the opening, looking down into it.
+  const isMobile = window.innerWidth < window.innerHeight;
   const CAM = {
-    outside: { pos: [4.6, 2.6, 6.2], look: [0, 1.7, 0] },
-    inside:  { pos: [0.8, 1.9, 2.7], look: [0.3, 1.65, 0.2] }
+    outside: { pos: [4, 2.6, 8.2], look: [0, 1.7, 0] },
+    inside: isMobile
+      ? { pos: [0, 2.5, 5], look: [0, 1.65, 0] }
+      : { pos: [0, 2.2, 3],   look: [0, 1.65, 0] }
   };
 
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
