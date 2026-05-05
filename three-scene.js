@@ -19,7 +19,7 @@ const ThreeScene = (() => {
   // Outside cam sees it 3/4. Inside cam ends up just above the opening, looking down into it.
   const CAM = {
     outside: { pos: [4.6, 2.6, 6.2], look: [0, 1.7, 0] },
-    inside:  { pos: [1.05, 2.55, 1.55], look: [0.3, 1.55, 0.5] }
+    inside:  { pos: [0.8, 1.9, 2.7], look: [0.3, 1.65, 0.2] }
   };
 
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
@@ -387,7 +387,7 @@ const ThreeScene = (() => {
     camera.updateProjectionMatrix();
   }
 
-  function cameraTo(stage, dur = 2200) {
+  function cameraTo(stage, dur = 3200) {
     const target = CAM[stage] || CAM.outside;
     camAnim = {
       start: performance.now(),
@@ -436,7 +436,7 @@ const ThreeScene = (() => {
       if (camAnim.stage === 'inside') {
         // Bell-curve arc: sin(k*π) is 0 at both start and end, peaks at midpoint.
         // This creates a gentle orbital sweep with no jump on frame 0.
-        const sweep = Math.sin(k * Math.PI) * 0.22;
+        const sweep = Math.sin(k * Math.PI) * -0.6;
         const lt = camAnim.lookTo;
         const dx = p.x - lt.x, dz = p.z - lt.z;
         const cs = Math.cos(sweep), sn = Math.sin(sweep);
