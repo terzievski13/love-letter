@@ -446,13 +446,7 @@ const ThreeScene = (() => {
       camera.position.copy(p);
       currentLook.lerpVectors(camAnim.lookFrom, camAnim.lookTo, e);
       camera.lookAt(currentLook);
-      // motion blur: peaks at mid-animation, fades to 0 at start and end
-      const blurPx = (Math.sin(k * Math.PI) * 0.5).toFixed(2);
-      canvasEl.style.filter = `blur(${blurPx}px)`;
-      if (k >= 1) {
-        camAnim = null;
-        canvasEl.style.filter = '';
-      }
+      if (k >= 1) camAnim = null;
     } else {
       // gentle idle drift on camera while outside
       camera.lookAt(currentLook);
