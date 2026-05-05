@@ -24,15 +24,22 @@ These are confirmed good. Leave them alone.
 - Handwritten font (Caveat), beautiful Fraunces serif in titles
 
 ### Camera & navigation (confirmed working)
-- Initial 3/4 outside view: camera at [4.6, 2.6, 6.2] looking at [0, 1.7, 0]
-- Click mailbox → slow steady zoom in, gentle clockwise arc mid-journey, 
-  no sudden jump on first frame (fixed with sin(k*π) bell-curve sweep)
-- Zoom back out with "back outside" button
+- Outside view: camera at [4, 2.6, 8.2] looking at [0, 1.7, 0]
+- Click mailbox → 3-second clockwise arc zoom (easeInOutCubic), sin²(k·π) bell 
+  curve for the sweep so the arc starts and ends smoothly
+- Desktop end: pos [0, 2.2, 3] look [0, 1.65, 0] — face-on view of mailbox opening
+- Mobile end (portrait): pos [0, 2.5, 5] look [0, 1.65, 0] — pulled back for tall frame
+- Duration and timings live in app.jsx (not the cameraTo default):
+    250ms delay → cameraTo("inside", 3000) → setStage("inside") at 3300ms
+- onResize skips if canvas dimensions unchanged — prevents camera jump when 
+  the letter overlay mounts
+- Zoom back out with "back outside" button (1900ms, in app.jsx)
 - 4-stage state machine: outside → arriving → inside → reading
+- No motion blur — CSS blur can't exclude the mailbox, removed entirely
 
 ### Mailbox door animation (confirmed working)
-- Spring simulation (stiffness 0.045, damping 0.76) replaces the old lerp
-- Gives a subtle overshoot/settle — feels like a real lightweight door
+- Spring simulation (stiffness 0.045, damping 0.84)
+- Decelerates clearly near fully open with no bounce/overshoot
 
 ### 3D scene basics (confirmed working)
 - Sunset sky gradient on backside sphere with sprite clouds
