@@ -431,7 +431,7 @@ const ThreeScene = (() => {
     if (camAnim) {
       const k = Math.min(1, (now - camAnim.start) / camAnim.dur);
       // inside: gentler quad ease for a slow steady zoom; outside: snappier cubic
-      const e = camAnim.stage === 'inside' ? easeInOutQuad(k) : easeInOutCubic(k);
+      const e = easeInOutCubic(k);
       const p = new THREE.Vector3().lerpVectors(camAnim.from, camAnim.to, e);
       if (camAnim.stage === 'inside') {
         // Bell-curve arc: sin(k*π) is 0 at both start and end, peaks at midpoint.
@@ -447,7 +447,7 @@ const ThreeScene = (() => {
       currentLook.lerpVectors(camAnim.lookFrom, camAnim.lookTo, e);
       camera.lookAt(currentLook);
       // motion blur: peaks at mid-animation, fades to 0 at start and end
-      const blurPx = (Math.sin(k * Math.PI) * 2).toFixed(2);
+      const blurPx = (Math.sin(k * Math.PI) * 0.5).toFixed(2);
       canvasEl.style.filter = `blur(${blurPx}px)`;
       if (k >= 1) {
         camAnim = null;
