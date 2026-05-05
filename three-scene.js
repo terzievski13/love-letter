@@ -13,6 +13,7 @@ const ThreeScene = (() => {
   let onClickCb = null;
   let raycaster, pointer;
   let canvasEl;
+  let _lastW = 0, _lastH = 0;
 
   // camera waypoints (target positions / look-ats)
   // Mailbox group is rotated -0.55 rad on Y so opening points roughly toward (+X, +Z).
@@ -385,12 +386,14 @@ const ThreeScene = (() => {
   function onResize() {
     if (!canvasEl) return;
     const w = canvasEl.clientWidth, h = canvasEl.clientHeight;
+    if (w === _lastW && h === _lastH) return;
+    _lastW = w; _lastH = h;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
 
-  function cameraTo(stage, dur = 3200) {
+  function cameraTo(stage, dur = 3000) {
     const target = CAM[stage] || CAM.outside;
     camAnim = {
       start: performance.now(),
@@ -422,7 +425,7 @@ const ThreeScene = (() => {
 
     // door spring — slight overshoot gives a satisfying mechanical settle
     const springForce = (doorTarget - doorCurrent) * 0.045;
-    doorVelocity = (doorVelocity + springForce) * 0.76;
+    doorVelocity = (doorVelocity + springForce) * 0.84;
     doorCurrent += doorVelocity;
     doorGroup.rotation.x = -doorCurrent * (Math.PI * 0.95);
 
@@ -439,7 +442,7 @@ const ThreeScene = (() => {
       if (camAnim.stage === 'inside') {
         // Bell-curve arc: sin(k*π) is 0 at both start and end, peaks at midpoint.
         // This creates a gentle orbital sweep with no jump on frame 0.
-        const sweep = Math.pow(Math.sin(k * Math.PI), 2) * 0.6;
+        const sweep = Math.pow(Math.sin(k * Math.PI), 3) * 0.3;
         const lt = camAnim.lookTo;
         const dx = p.x - lt.x, dz = p.z - lt.z;
         const cs = Math.cos(sweep), sn = Math.sin(sweep);
