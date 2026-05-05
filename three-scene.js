@@ -436,7 +436,7 @@ const ThreeScene = (() => {
       if (camAnim.stage === 'inside') {
         // Bell-curve arc: sin(k*π) is 0 at both start and end, peaks at midpoint.
         // This creates a gentle orbital sweep with no jump on frame 0.
-        const sweep = Math.sin(k * Math.PI) * -0.6;
+        const sweep = Math.pow(Math.sin(k * Math.PI), 2) * 0.6;
         const lt = camAnim.lookTo;
         const dx = p.x - lt.x, dz = p.z - lt.z;
         const cs = Math.cos(sweep), sn = Math.sin(sweep);
