@@ -22,9 +22,9 @@ function App() {
       setStage("arriving");
       window.ThreeScene.setDoorOpen(1);
       // camera move begins ~ when door starts opening
-      setTimeout(() => window.ThreeScene.cameraTo("inside", 2600), 250);
+      setTimeout(() => window.ThreeScene.cameraTo("inside", 3000), 250);
       // letters appear once camera has arrived
-      setTimeout(() => setStage("inside"), 2900);
+      setTimeout(() => setStage("inside"), 3300);
     });
   }, []);
 

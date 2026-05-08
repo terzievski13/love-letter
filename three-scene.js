@@ -9,7 +9,7 @@
 
 const ThreeScene = (() => {
   let renderer, scene, camera, raf;
-  let mailboxGroup, doorGroup, flagGroup;
+  let mailboxGroup, doorGroup;
   let onClickCb = null;
   let raycaster, pointer;
   let canvasEl;
@@ -33,9 +33,6 @@ const ThreeScene = (() => {
   let doorTarget = 0;
   let doorCurrent = 0;
   let doorVelocity = 0;
-
-  // flag wiggle
-  let flagPhase = 0;
 
   function init(canvas) {
     canvasEl = canvas;
@@ -224,121 +221,112 @@ const ThreeScene = (() => {
   }
 
   function buildMailbox() {
-    /* Mailbox is built so its OPENING (door end) faces +Z.
-       Local axes: +X = right side of box, +Y = up, +Z = front (door),
-                   -Z = back (closed wall).
-       After we build it, we tilt the whole group ~ -0.45 rad on Y so
-       the camera's outside view (at +X +Z) sees a 3/4 angle. */
+    /* Classic arch-profile mailbox: rectangular lower section + half-cylinder dome on top.
+       Opening (+Z face) is the door. Rotated -0.55 rad on Y for a 3/4 camera angle. */
     mailboxGroup = new THREE.Group();
     scene.add(mailboxGroup);
 
-    // softer toon-ish materials
-    const woodMat   = new THREE.MeshLambertMaterial({ color: 0x7a5640 });
-    const bodyMat   = new THREE.MeshLambertMaterial({ color: 0xc46554 });
-    const bodyDark  = new THREE.MeshLambertMaterial({ color: 0x9a4636 });
-    const innerMat  = new THREE.MeshLambertMaterial({ color: 0x3a2218, side: THREE.DoubleSide });
-    const ironMat   = new THREE.MeshLambertMaterial({ color: 0x33241c });
-    const flagMat   = new THREE.MeshLambertMaterial({ color: 0xd45044 });
+    // Dimensions
+    const R  = 0.36;  // arch radius (half-width = 0.72 total)
+    const BH = 0.30;  // lower rectangular section height
+    const L  = 1.20;  // depth (front to back, along Z)
 
-    // post
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.6, 0.14), woodMat);
+    const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xc46554 });
+    const darkMat  = new THREE.MeshLambertMaterial({ color: 0x8a3020 });
+    const innerMat = new THREE.MeshLambertMaterial({ color: 0x2a1810, side: THREE.DoubleSide });
+    const postMat  = new THREE.MeshLambertMaterial({ color: 0x5a3828 });
+    const ironMat  = new THREE.MeshLambertMaterial({ color: 0x2a1810 });
+
+    // Post
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.6, 0.14), postMat);
     post.position.y = 0.8;
     post.castShadow = true;
     mailboxGroup.add(post);
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.42), woodMat);
+
+    // Base plate
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.44), postMat);
     plate.position.y = 0.03;
     plate.castShadow = true; plate.receiveShadow = true;
     mailboxGroup.add(plate);
 
-    // body group: opening faces +Z
+    // Body group — sits exactly at post top (post goes 0→1.6)
     const body = new THREE.Group();
-    body.position.y = 1.78;
+    body.position.y = 1.6;
     mailboxGroup.add(body);
 
-    // Half-cylinder outer shell — axis along Z, top half above the floor.
-    // CylinderGeometry default axis is Y, so we rotate -90° on X to point along Z.
-    const shellOuter = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.42, 1.05, 28, 1, true, 0, Math.PI),
-      bodyMat
-    );
-    shellOuter.rotation.x = -Math.PI / 2;
-    // The half-cylinder by default opens at angle 0 (which is +X side after the Y axis); 
-    // but we want flat side DOWN. After rotating X = -90, the open half spans +Y (up) by default? 
-    // Actually we want it open downward so we can place a flat floor. Set thetaStart so the missing
-    // half is below the local origin -> rotate the geometry around its (now Z) axis by -PI/2.
-    shellOuter.rotation.z = 0;
-    shellOuter.castShadow = true; shellOuter.receiveShadow = true;
-    body.add(shellOuter);
+    // Helper: arch cross-section shape (flat bottom, semicircle top)
+    function archShape() {
+      const s = new THREE.Shape();
+      s.moveTo(-R, 0);
+      s.lineTo(-R, BH);
+      s.absarc(0, BH, R, Math.PI, 0, true);
+      s.lineTo(R, 0);
+      s.closePath();
+      return s;
+    }
 
-    // Inner shell (slightly smaller, dark interior)
-    const shellInner = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.40, 0.40, 1.02, 28, 1, true, 0, Math.PI),
+    // OUTER SHELL — single ExtrudeGeometry: no seam at dome/side junction.
+    // DoubleSide so the back cap is visible from inside and the door frame shows
+    // on the inside when the door is open.
+    const outerMat = new THREE.MeshLambertMaterial({ color: 0xc46554, side: THREE.DoubleSide });
+    const outerShell = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(archShape(), { depth: L, bevelEnabled: false }),
+      outerMat
+    );
+    outerShell.position.z = -L / 2; // centre along Z so back=-L/2, front=+L/2
+    outerShell.castShadow = true;
+    outerShell.receiveShadow = true;
+    body.add(outerShell);
+
+    // INNER shell — half-cylinder slightly smaller, dark interior
+    const domeInner = new THREE.Mesh(
+      new THREE.CylinderGeometry(R - 0.015, R - 0.015, L - 0.01, 40, 1, true, -Math.PI / 2, Math.PI),
       innerMat
     );
-    shellInner.rotation.x = -Math.PI / 2;
-    body.add(shellInner);
+    domeInner.rotation.x = -Math.PI / 2;
+    domeInner.position.y = BH;
+    body.add(domeInner);
 
-    // Floor of the mailbox
+    // Inner side panels (dark lower walls, slightly inset)
+    const innerSideGeo = new THREE.BoxGeometry(0.012, BH, L - 0.01);
+    const innerSideL = new THREE.Mesh(innerSideGeo, innerMat);
+    innerSideL.position.set(-(R - 0.015), BH / 2, 0);
+    body.add(innerSideL);
+    const innerSideR = new THREE.Mesh(innerSideGeo, innerMat);
+    innerSideR.position.set(R - 0.015, BH / 2, 0);
+    body.add(innerSideR);
+
+    // Floor
     const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.84, 0.02, 1.04),
+      new THREE.BoxGeometry((R - 0.015) * 2, 0.018, L - 0.01),
       innerMat
     );
-    floor.position.y = -0.01;
+    floor.position.y = 0.009;
+    floor.receiveShadow = true;
     body.add(floor);
 
-    // Back wall (closed end, at -Z)
-    const back = new THREE.Mesh(
-      new THREE.CircleGeometry(0.40, 28, 0, Math.PI),
-      bodyDark
-    );
-    back.position.z = -0.525;
-    back.rotation.z = 0;
-    back.rotation.y = Math.PI; // face -Z outward
-    body.add(back);
-
-    // door — hinged at the BOTTOM of the front opening, swings down/out
+    // DOOR GROUP — hinge at y=0, front face at z=L/2, swings on X axis
     doorGroup = new THREE.Group();
-    doorGroup.position.set(0, 0, 0.525); // at the front opening
+    doorGroup.position.set(0, 0, L / 2);
     body.add(doorGroup);
-    // door panel: a half-disc, with its straight edge at the bottom (the hinge)
-    // CircleGeometry from 0..PI gives a half disc with straight edge along the x-axis,
-    // centered at (0,0). Translate up by 0 — it already pivots around y=0 which is the hinge line.
-    const doorMesh = new THREE.Mesh(
-      new THREE.CircleGeometry(0.40, 28, 0, Math.PI),
-      bodyMat
-    );
-    // door panel local: straight edge along x at y=0 (hinge), curve goes up.
-    doorMesh.castShadow = true;
-    doorGroup.add(doorMesh);
-    // little metal trim / handle near the top of the door
-    const handle = new THREE.Mesh(
-      new THREE.SphereGeometry(0.028, 12, 8),
-      ironMat
-    );
-    handle.position.set(0, 0.32, 0.01);
-    doorGroup.add(handle);
 
-    // flag on the LEFT side (–X local)
-    flagGroup = new THREE.Group();
-    flagGroup.position.set(-0.42, 0.0, 0.05); // mounted on left side, near front
-    body.add(flagGroup);
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.012, 0.34, 8),
+    // Door face is DoubleSide so it stays visible after swinging past 90°
+    const doorMat = new THREE.MeshLambertMaterial({ color: 0xc46554, side: THREE.DoubleSide });
+    const doorFace = new THREE.Mesh(new THREE.ShapeGeometry(archShape()), doorMat);
+    doorFace.castShadow = true;
+    doorFace.receiveShadow = true;
+    doorGroup.add(doorFace);
+
+    // Latch — small horizontal bar centred on the door, near top of rectangular section
+    const latch = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.035, 0.035),
       ironMat
     );
-    pole.position.y = 0.17;
-    flagGroup.add(pole);
-    const flag = new THREE.Mesh(
-      new THREE.BoxGeometry(0.005, 0.1, 0.18),
-      flagMat
-    );
-    flag.position.set(0, 0.30, 0.09);
-    flagGroup.add(flag);
+    latch.position.set(0, BH * 0.72, 0.02);
+    doorGroup.add(latch);
 
     mailboxGroup.userData.body = body;
     mailboxGroup.traverse(o => { if (o.isMesh) o.userData.mailbox = true; });
-
-    // 3/4 angle: rotate so the front opening tilts toward outside camera (+X +Z)
     mailboxGroup.rotation.y = -0.55;
   }
 
@@ -427,11 +415,7 @@ const ThreeScene = (() => {
     const springForce = (doorTarget - doorCurrent) * 0.045;
     doorVelocity = (doorVelocity + springForce) * 0.84;
     doorCurrent += doorVelocity;
-    doorGroup.rotation.x = -doorCurrent * (Math.PI * 0.95);
-
-    // flag wiggle
-    flagPhase += 0.03;
-    flagGroup.rotation.z = Math.sin(flagPhase) * 0.06;
+    doorGroup.rotation.x = doorCurrent * (Math.PI * 0.95);
 
     // camera animation
     if (camAnim) {
