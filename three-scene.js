@@ -269,11 +269,22 @@ const ThreeScene = (() => {
     // DoubleSide so the back cap is visible from inside and the door frame shows
     // on the inside when the door is open.
     const outerMat = new THREE.MeshLambertMaterial({ color: 0xc46554 });
+    // Hollow shell: punch an inner arch hole so the front/back caps are rings, not solid plates.
+    const shellShape = archShape();
+    const wallT = 0.015;
+    const Ri = R - wallT;
+    const innerHole = new THREE.Path();
+    innerHole.moveTo(Ri, 0);
+    innerHole.lineTo(Ri, BH);
+    innerHole.absarc(0, BH, Ri, 0, Math.PI, false);
+    innerHole.lineTo(-Ri, 0);
+    innerHole.closePath();
+    shellShape.holes.push(innerHole);
     const outerShell = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(archShape(), { depth: L, bevelEnabled: false }),
+      new THREE.ExtrudeGeometry(shellShape, { depth: L, bevelEnabled: false }),
       outerMat
     );
-    outerShell.position.z = -L / 2; // centre along Z so back=-L/2, front=+L/2
+    outerShell.position.z = -L / 2;
     outerShell.castShadow = true;
     outerShell.receiveShadow = true;
     body.add(outerShell);
