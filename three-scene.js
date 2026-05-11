@@ -268,7 +268,7 @@ const ThreeScene = (() => {
     // OUTER SHELL — single ExtrudeGeometry: no seam at dome/side junction.
     // DoubleSide so the back cap is visible from inside and the door frame shows
     // on the inside when the door is open.
-    const outerMat = new THREE.MeshLambertMaterial({ color: 0xc46554, side: THREE.DoubleSide });
+    const outerMat = new THREE.MeshLambertMaterial({ color: 0xc46554 });
     const outerShell = new THREE.Mesh(
       new THREE.ExtrudeGeometry(archShape(), { depth: L, bevelEnabled: false }),
       outerMat
@@ -304,6 +304,21 @@ const ThreeScene = (() => {
     floor.position.y = 0.009;
     floor.receiveShadow = true;
     body.add(floor);
+
+    // Dark back wall — without this the red outer shell back cap shows through
+    const backWall = new THREE.Mesh(new THREE.ShapeGeometry(archShape()), innerMat);
+    backWall.position.z = -L / 2 + 0.012;
+    body.add(backWall);
+
+    // Decorative letter props — cream envelopes sitting on the floor
+    const letterMat = new THREE.MeshLambertMaterial({ color: 0xf5ead8 });
+    const letterGeo = new THREE.BoxGeometry(0.55, 0.008, 0.38);
+    [{ x: -0.05, rz: 0.06 }, { x: 0.00, rz: 0.00 }, { x: 0.06, rz: -0.05 }].forEach(({ x, rz }) => {
+      const letter = new THREE.Mesh(letterGeo, letterMat);
+      letter.position.set(x, 0.022, -0.1);
+      letter.rotation.z = rz;
+      body.add(letter);
+    });
 
     // DOOR GROUP — hinge at y=0, front face at z=L/2, swings on X axis
     doorGroup = new THREE.Group();
@@ -415,6 +430,7 @@ const ThreeScene = (() => {
     const springForce = (doorTarget - doorCurrent) * 0.045;
     doorVelocity = (doorVelocity + springForce) * 0.84;
     doorCurrent += doorVelocity;
+    if (doorCurrent < 0) { doorCurrent = 0; if (doorVelocity < 0) doorVelocity *= -0.12; }
     doorGroup.rotation.x = doorCurrent * (Math.PI * 0.95);
 
     // camera animation
