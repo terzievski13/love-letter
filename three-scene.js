@@ -48,8 +48,8 @@ const ThreeScene = (() => {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xfbcf9a); // fallback if sky fails
-    scene.fog = new THREE.Fog(0xf6c89a, 30, 200);
+    scene.background = new THREE.Color(0xd8ecf8); // fallback if sky fails
+    scene.fog = new THREE.Fog(0xd8ecf8, 25, 80);
 
     camera = new THREE.PerspectiveCamera(38, initW / initH, 0.1, 200);
     camera.position.set(...CAM.outside.pos);
@@ -59,9 +59,7 @@ const ThreeScene = (() => {
     pointer = new THREE.Vector2();
 
     buildSky();
-    buildWater();
     buildGround();
-    buildMountains();
     buildMailbox();
     buildLights();
 
@@ -92,17 +90,17 @@ const ThreeScene = (() => {
     c.width = 16; c.height = 256;
     const ctx = c.getContext("2d");
     const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0.00, "#f2a06a"); // top
-    g.addColorStop(0.45, "#fbcf9a");
-    g.addColorStop(0.75, "#fde6cd");
-    g.addColorStop(1.00, "#f6c89a"); // horizon
+    g.addColorStop(0.00, "#87ceeb"); // top
+    g.addColorStop(0.45, "#c8e8f5");
+    g.addColorStop(0.75, "#fde8d0");
+    g.addColorStop(1.00, "#e8d8c8"); // horizon
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 16, 256);
     // sun glow band
     const sg = ctx.createRadialGradient(8, 80, 4, 8, 80, 60);
-    sg.addColorStop(0, "rgba(255,240,212,0.95)");
-    sg.addColorStop(0.4, "rgba(255,240,212,0.4)");
-    sg.addColorStop(1, "rgba(255,240,212,0)");
+    sg.addColorStop(0, "rgba(255,248,235,0.85)");
+    sg.addColorStop(0.4, "rgba(255,248,235,0.3)");
+    sg.addColorStop(1, "rgba(255,248,235,0)");
     ctx.fillStyle = sg;
     ctx.fillRect(0, 0, 16, 256);
     const tex = new THREE.CanvasTexture(c);
@@ -111,14 +109,14 @@ const ThreeScene = (() => {
     const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false });
     scene.add(new THREE.Mesh(geo, mat));
 
-    // distant clouds (a few flat sprites)
+    // clouds ringing the dome horizon in full 360° circle
     const cloudTex = makeCloudTexture();
-    for (let i = 0; i < 6; i++) {
-      const m = new THREE.SpriteMaterial({ map: cloudTex, color: 0xfff3e6, transparent: true, opacity: 0.72, depthWrite: false });
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.SpriteMaterial({ map: cloudTex, color: 0xffffff, transparent: true, opacity: 0.78, depthWrite: false });
       const s = new THREE.Sprite(m);
-      const ang = (i / 6) * Math.PI * 0.8 - Math.PI * 0.15;
-      const r = 60 + Math.random() * 10;
-      s.position.set(Math.cos(ang) * r, 8 + Math.random() * 4, -Math.abs(Math.sin(ang) * r) - 20);
+      const ang = (i / 10) * Math.PI * 2;
+      const r = 62 + Math.random() * 12;
+      s.position.set(Math.cos(ang) * r, 5 + Math.random() * 6, Math.sin(ang) * r);
       s.scale.set(18 + Math.random() * 8, 6 + Math.random() * 2, 1);
       scene.add(s);
     }
@@ -139,85 +137,16 @@ const ThreeScene = (() => {
     return t;
   }
 
-  function buildWater() {
-    // Warm sunset lake — gradient canvas texture, starts behind the shore edge at z=-10
-    const c = document.createElement("canvas");
-    c.width = 256; c.height = 256;
-    const ctx = c.getContext("2d");
-    // gradient runs top (far) to bottom (near shore)
-    const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0.00, "#2a3a52"); // deep slate-blue far
-    g.addColorStop(0.40, "#4a6a82"); // calm lake blue
-    g.addColorStop(0.78, "#6a8ea4"); // lighter mid-blue
-    g.addColorStop(1.00, "#7a9eac"); // near shore blue
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
-    // warm sun glitter streak on the water surface
-    const sg = ctx.createRadialGradient(128, 80, 6, 128, 80, 90);
-    sg.addColorStop(0, "rgba(255,220,140,0.55)");
-    sg.addColorStop(1, "rgba(255,220,140,0)");
-    ctx.fillStyle = sg;
-    ctx.fillRect(0, 0, 256, 256);
-    // soft ripple lines
-    ctx.strokeStyle = "rgba(200,230,255,0.18)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 60; i++) {
-      const wy = Math.random() * 256;
-      ctx.beginPath();
-      ctx.moveTo(Math.random() * 256, wy);
-      ctx.lineTo(Math.random() * 256 + 40, wy);
-      ctx.stroke();
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    // Large plane centered well behind the shore so it fills the background
-    const water = new THREE.Mesh(
-      new THREE.PlaneGeometry(600, 400),
-      new THREE.MeshBasicMaterial({ map: tex, fog: true })
-    );
-    water.rotation.x = -Math.PI / 2;
-    water.position.set(0, -0.05, -100); // slightly below ground level, far back
-    scene.add(water);
-  }
-
   function buildGround() {
-    // Box geometry so the front face at z=-10 is the visible shore edge
-    // Top surface at y=0 matches the mailbox base plate exactly
-    const ground = new THREE.Mesh(
-      new THREE.BoxGeometry(200, 0.5, 100),
+    // Domed hemisphere: circular hill with mailbox on top, grass curves away all sides into sky
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(40, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2),
       new THREE.MeshStandardMaterial({ color: 0x8a9040, roughness: 0.95, metalness: 0 })
     );
-    // position: top at y=0, front face (shore edge) at z=-10, back edge at z=90
-    ground.position.set(0, -0.25, 40);
-    ground.receiveShadow = true;
-    scene.add(ground);
-  }
-
-  function buildMountains() {
-    // Three depth layers of low-poly peaks — closer ones dark, far ones warm-hazy
-    // Fog (30–200) provides natural atmospheric thinning on the far peaks
-    // r is kept to ~¼ of h so peaks look narrow and alpine, not pyramidal
-    const peaks = [
-      // front layer — darkest, least fogged
-      { x: -18, z:  -65, h: 30, r:  9, color: 0x7a4828 },
-      { x:  15, z:  -62, h: 24, r:  7, color: 0x7a5030 },
-      // middle layer
-      { x: -35, z:  -90, h: 56, r: 16, color: 0x9a5838 },
-      { x:   4, z:  -86, h: 72, r: 20, color: 0x8a4830 }, // dominant peak
-      { x:  36, z:  -96, h: 50, r: 15, color: 0x9a6040 },
-      // back layer — lightest, most fogged
-      { x: -55, z: -118, h: 44, r: 14, color: 0xb87050 },
-      { x:  20, z: -112, h: 58, r: 18, color: 0xaa6848 },
-      { x:  60, z: -126, h: 38, r: 12, color: 0xbe8060 },
-    ];
-    peaks.forEach(({ x, z, h, r, color }) => {
-      const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(r, h, 5, 1), // 5-sided = angular low-poly alpine shape
-        new THREE.MeshLambertMaterial({ color, fog: true })
-      );
-      cone.position.set(x, h / 2, z); // base at y=0, rises upward
-      scene.add(cone);
-    });
+    // Center sphere at [0, -40, 0] so the top (y=0) is where mailbox sits
+    dome.position.set(0, -40, 0);
+    dome.receiveShadow = true;
+    scene.add(dome);
   }
 
   function buildMailbox() {
@@ -357,10 +286,10 @@ const ThreeScene = (() => {
   }
 
   function buildLights() {
-    const ambient = new THREE.HemisphereLight(0xfde4c8, 0x6a4a3a, 0.55);
+    const ambient = new THREE.HemisphereLight(0xc8e8f5, 0x6a7840, 0.75);
     scene.add(ambient);
 
-    const sun = new THREE.DirectionalLight(0xffd6a0, 1.6);
+    const sun = new THREE.DirectionalLight(0xfffae0, 1.15);
     sun.position.set(8, 5, -10);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -373,8 +302,8 @@ const ThreeScene = (() => {
     sun.shadow.bias = -0.0005;
     scene.add(sun);
 
-    // warm rim light
-    const rim = new THREE.DirectionalLight(0xff9a6a, 0.4);
+    // soft cool-blue rim light
+    const rim = new THREE.DirectionalLight(0xd4eeff, 0.3);
     rim.position.set(-5, 2, 4);
     scene.add(rim);
   }
