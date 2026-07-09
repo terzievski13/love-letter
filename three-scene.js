@@ -112,23 +112,26 @@ const ThreeScene = (() => {
     const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false, depthTest: false });
     scene.add(new THREE.Mesh(geo, mat));
 
-    // distant clouds spread across the full sky
+    // Distant clouds spread across the sky. Explicit x/y/z (not derived from
+    // an angle) so placement is predictable: x spans both sides of centre,
+    // y is kept well above the mountains' peak height so no cloud can ever
+    // read as a stray ridge on the skyline again.
     const cloudTex = makeCloudTexture();
     const cloudConfigs = [
-      { ang: -1.1, r: 62, y: 14, w: 28, h: 8,  color: 0xffddd0, opacity: 0.65 }, // far left, high, pink tint
-      { ang: -0.7, r: 58, y: 10, w: 22, h: 7,  color: 0xffe8d8, opacity: 0.70 },
-      { ang: -0.3, r: 65, y: 12, w: 26, h: 8,  color: 0xfff3e6, opacity: 0.72 },
-      { ang:  0.1, r: 60, y:  9, w: 20, h: 6,  color: 0xffe0cc, opacity: 0.60 }, // slight pink near sun
-      { ang:  0.5, r: 68, y: 13, w: 24, h: 7,  color: 0xfff3e6, opacity: 0.68 },
-      { ang:  0.9, r: 62, y: 11, w: 22, h: 7,  color: 0xffe8d8, opacity: 0.72 },
-      { ang: -0.9, r: 55, y: 18, w: 30, h: 9,  color: 0xffd8cc, opacity: 0.55 }, // high dramatic left cloud
-      { ang:  0.3, r: 55, y: 17, w: 26, h: 8,  color: 0xffeee0, opacity: 0.58 },
-      { ang: -0.05,r: 70, y: 16, w: 32, h: 10, color: 0xffe0d0, opacity: 0.50 }, // large center-back cloud
+      { x: -55, y: 32, z: -70, w: 28, h: 8,  color: 0xffddd0, opacity: 0.65 },
+      { x: -38, y: 28, z: -55, w: 22, h: 7,  color: 0xffe8d8, opacity: 0.70 },
+      { x: -18, y: 34, z: -40, w: 26, h: 8,  color: 0xfff3e6, opacity: 0.72 },
+      { x:   2, y: 26, z: -26, w: 20, h: 6,  color: 0xffe0cc, opacity: 0.60 },
+      { x:  20, y: 33, z: -52, w: 24, h: 7,  color: 0xfff3e6, opacity: 0.68 },
+      { x:  40, y: 30, z: -68, w: 22, h: 7,  color: 0xffe8d8, opacity: 0.72 },
+      { x: -30, y: 40, z: -63, w: 30, h: 9,  color: 0xffd8cc, opacity: 0.55 },
+      { x:  28, y: 38, z: -36, w: 26, h: 8,  color: 0xffeee0, opacity: 0.58 },
+      { x:  -2, y: 36, z: -23, w: 32, h: 10, color: 0xffe0d0, opacity: 0.50 },
     ];
-    cloudConfigs.forEach(({ ang, r, y, w, h, color, opacity }) => {
+    cloudConfigs.forEach(({ x, y, z, w, h, color, opacity }) => {
       const m = new THREE.SpriteMaterial({ map: cloudTex, color, transparent: true, opacity, depthWrite: false });
       const s = new THREE.Sprite(m);
-      s.position.set(Math.cos(ang) * r, y, -Math.abs(Math.sin(ang) * r) - 20);
+      s.position.set(x, y, z);
       s.scale.set(w, h, 1);
       scene.add(s);
     });
@@ -162,12 +165,27 @@ const ThreeScene = (() => {
     g.addColorStop(1.00, "#68a8c4"); // clean near-shore blue
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
-    // warm sun glitter streak
+    // warm sun glitter streak — back to its original spot (outside the
+    // visible strip), so the water reads as plain blue like before
     const sg = ctx.createRadialGradient(128, 70, 4, 128, 70, 80);
     sg.addColorStop(0, "rgba(255,210,130,0.40)");
     sg.addColorStop(1, "rgba(255,210,130,0)");
     ctx.fillStyle = sg;
     ctx.fillRect(0, 0, 256, 256);
+    // Ripple lines — same style as the main branch (short straight strokes,
+    // cool blue-white), kept inside the ~46px band that's actually visible
+    // on screen here (the shore hides everything past y≈187, the mountains
+    // hide everything before y≈141) — main's own random full-canvas
+    // placement would mostly land somewhere hidden in this scene's geometry.
+    ctx.strokeStyle = "rgba(200,230,255,0.18)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 30; i++) {
+      const wy = 141 + Math.random() * 46;
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * 256, wy);
+      ctx.lineTo(Math.random() * 256 + 40, wy);
+      ctx.stroke();
+    }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     // Large plane centered well behind the shore so it fills the background
@@ -185,7 +203,7 @@ const ThreeScene = (() => {
     // Top surface at y=0 matches the mailbox base plate exactly
     const ground = new THREE.Mesh(
       new THREE.BoxGeometry(200, 0.5, 100),
-      new THREE.MeshStandardMaterial({ color: 0x8a9040, roughness: 0.95, metalness: 0 })
+      new THREE.MeshStandardMaterial({ color: 0x8ca511, roughness: 0.95, metalness: 0 })
     );
     // position: top at y=0, front face (shore edge) at z=-10, back edge at z=90
     ground.position.set(0, -0.25, 40);
@@ -219,10 +237,10 @@ const ThreeScene = (() => {
     const layers = [
       {
         // Front foothills — deep warm purple silhouette just behind the lake
-        z: -80,
-        rocky: 0x3a2e40,
-        forest: 0x2a3820,
-        forestMaxY: 11,
+        z: -90,
+        rocky: 0x3a1e1c,
+        forest: 0x364e34,
+        forestRatio: 0.4, // treeline height as a fraction of each peak — keeps the same curve, just shorter
         pts: [
           [-92,0],[-76,7],[-60,18],[-46,11],[-32,24],[-18,15],[-4,28],
           [10,18],[24,14],[38,21],[52,12],[66,17],[78,8],[92,0]
@@ -230,10 +248,10 @@ const ThreeScene = (() => {
       },
       {
         // Main range — warm mauve, dominant peaks left of centre, taper right
-        z: -115,
-        rocky: 0x6e4e62,
-        forest: 0x384530,
-        forestMaxY: 17,
+        z: -105,
+        rocky: 0x461C14,
+        forest: 0x473227,
+        forestRatio: 0.38,
         pts: [
           [-94,2],[-78,12],[-62,26],[-46,16],[-30,40],[-14,26],
           [0,48],[14,36],[28,50],[42,36],[56,22],[68,14],[80,9],[94,2]
@@ -243,24 +261,44 @@ const ThreeScene = (() => {
         // Distant range — warm rose-gray, fog blends it into peach horizon
         z: -145,
         rocky: 0x9a7880,
-        forest: 0x6a5a58,
-        forestMaxY: 14,
+        forest: 0x6e5868,
+        forestRatio: 0.35,
         pts: [
-          [-96,3],[-80,14],[-62,28],[-44,18],[-24,38],[-4,26],
-          [16,42],[36,28],[54,36],[72,20],[88,10],[96,3]
+          [-141,3],[-125,14],[-107,28],[-89,18],[-69,38],[-49,26],
+          [-29,42],[-9,28],[9,36],[27,20],[43,10],[51,3]
         ]
       }
     ];
 
-    layers.forEach(({ z, rocky, forest, forestMaxY, pts }) => {
+    // Darkens each ridge toward its base with a vertex-color gradient — a
+    // fake contact shadow where it tucks behind the layer in front of it,
+    // for a sense of depth instead of flat cutout color.
+    function applyBaseShadow(mesh, colorHex, baseY, shadowHeight) {
+      const pos = mesh.geometry.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const base = new THREE.Color(colorHex);
+      const shadow = base.clone().multiplyScalar(0.45);
+      const c = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        const t = THREE.MathUtils.clamp((pos.getY(i) - baseY) / shadowHeight, 0, 1);
+        c.copy(shadow).lerp(base, t);
+        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+      }
+      mesh.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      mesh.material.vertexColors = true;
+      mesh.material.color.set(0xffffff);
+    }
+
+    layers.forEach(({ z, rocky, forest, forestRatio, pts }) => {
       const ridgeMesh = new THREE.Mesh(
         new THREE.ShapeGeometry(makeRidge(pts, -4)),
         new THREE.MeshBasicMaterial({ color: rocky, fog: true, side: THREE.DoubleSide })
       );
       ridgeMesh.position.z = z;
+      applyBaseShadow(ridgeMesh, rocky, -4, 6);
       scene.add(ridgeMesh);
 
-      const fPts = pts.map(([x, y]) => [x, Math.min(y, forestMaxY)]);
+      const fPts = pts.map(([x, y]) => [x, y * forestRatio]);
       const forestMesh = new THREE.Mesh(
         new THREE.ShapeGeometry(makeRidge(fPts, -4)),
         new THREE.MeshBasicMaterial({ color: forest, fog: true, side: THREE.DoubleSide })
@@ -411,7 +449,7 @@ const ThreeScene = (() => {
     scene.add(ambient);
 
     const sun = new THREE.DirectionalLight(0xffd6a0, 1.6);
-    sun.position.set(8, 5, -10);
+    sun.position.set(6, 3, 0);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -10;
