@@ -591,9 +591,8 @@ const ThreeScene = (() => {
     backWall.position.z = -L / 2 + 0.012;
     body.add(backWall);
 
-    // Envelope pile — messy but harmonic. Two flat on the floor, two leaning
-    // against the back wall with faces tilted toward the opening, and one
-    // "hero" envelope with a wax seal resting on top, angled up at the camera.
+    // Envelope fan — standing in the box like cards in a card catalog, faces
+    // toward the opening, each envelope leaning further open toward the front.
     // Each envelope is a thin box; the top (+Y) face carries the paper texture
     // (flap V-lines + optional seal), sides are plain cream.
     const sealTex = makeEnvelopeTexture(true);
@@ -612,14 +611,14 @@ const ThreeScene = (() => {
       return mesh;
     }
     const envelopes = [
-      // base layer — flat on the floor, loosely crossed
-      { w: 0.52, d: 0.36, tex: plainTex, pile: { x: -0.03, y: 0.037, z: -0.02, rotX: 0, rotY: 11.5, rotZ: 0 } },
-      { w: 0.50, d: 0.34, tex: plainTex, pile: { x: 0.06, y: 0.073, z: 0.10, rotX: 0, rotY: -17.2, rotZ: 0 }, tint: 0xf6ecd9 },
-      // leaning against the back wall, faces tilted toward the opening
-      { w: 0.48, d: 0.34, tex: plainTex, pile: { x: -0.07, y: 0.175, z: -0.40, rotX: 69.9, rotY: 5.7, rotZ: 2.3 }, tint: 0xf2e4cc },
-      { w: 0.42, d: 0.32, tex: sealTex,  pile: { x: 0.07, y: 0.190, z: -0.28, rotX: 60.2, rotY: -12.6, rotZ: -2.9 } },
-      // hero — resting on the base layer, propped up toward the viewer, wax seal
-      { w: 0.50, d: 0.36, tex: sealTex,  pile: { x: 0.00, y: 0.150, z: 0.14, rotX: 31.5, rotY: 4.6, rotZ: 1.1 } }
+      // fanned like a card catalog: upright at the back wall, each one toward
+      // the front leaning a bit further open, hero with wax seal in front.
+      // Values hand-tuned in the design-session Tweaks panel — don't re-derive.
+      { w: 0.52, d: 0.36, tex: plainTex, pile: { x: -0.075, y: 0.165, z: -0.47, rotX: 90, rotY: 0, rotZ: 0 } },
+      { w: 0.50, d: 0.34, tex: plainTex, pile: { x: -0.07, y: 0.19, z: -0.545, rotX: 90, rotY: 0, rotZ: 0 }, tint: 0xf6ecd9 },
+      { w: 0.48, d: 0.34, tex: plainTex, pile: { x: -0.07, y: 0.18, z: -0.145, rotX: 71, rotY: 11, rotZ: 1 }, tint: 0xf2e4cc },
+      { w: 0.42, d: 0.32, tex: sealTex,  pile: { x: 0.13, y: 0.17, z: -0.06, rotX: 67, rotY: -8, rotZ: -6 } },
+      { w: 0.50, d: 0.36, tex: sealTex,  pile: { x: -0.07, y: 0.165, z: 0.155, rotX: 50, rotY: 26, rotZ: 1.1 } }
     ];
     // Live-tweakable positions: pull from window.LETTERS_DATA.letters[i].pile
     // when present (edited via the Tweaks panel) so a saved edit survives a
@@ -645,7 +644,7 @@ const ThreeScene = (() => {
     // Interior light — dim, soft, candle-like: gentle falloff (low decay),
     // wider reach, warm but desaturated so it doesn't look like a bulb.
     // Position is Tweaks-adjustable too (see setLightPosition).
-    const lp = (window.LETTERS_DATA && window.LETTERS_DATA.lightPos) || { x: 0, y: 0.34, z: 0.08 };
+    const lp = (window.LETTERS_DATA && window.LETTERS_DATA.lightPos) || { x: 0.06, y: 0.455, z: 0.2 };
     interiorLight = new THREE.PointLight(0xffd9ae, 0, 2.4, 1.6);
     interiorLight.position.set(lp.x, lp.y, lp.z);
     body.add(interiorLight);
