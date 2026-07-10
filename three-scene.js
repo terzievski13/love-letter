@@ -9,7 +9,8 @@
 
 const ThreeScene = (() => {
   let renderer, scene, camera, raf;
-  let mailboxGroup, doorGroup;
+  let mailboxGroup, doorGroup, interiorLight;
+  let envelopeMeshes = [];
   let onClickCb = null;
   let raycaster, pointer;
   let canvasEl;
@@ -22,8 +23,8 @@ const ThreeScene = (() => {
   const CAM = {
     outside: { pos: [4, 2.6, 8.2], look: [0, 1.7, 0] },
     inside: isMobile
-      ? { pos: [0, 2.5, 5], look: [0, 1.65, 0] }
-      : { pos: [0, 2.2, 3],   look: [0, 1.65, 0] }
+      ? { pos: [-1.5, 2.58, 4.85], look: [0, 1.65, 0] }
+      : { pos: [-0.88, 2.25, 2.80], look: [0, 1.65, 0] }
   };
 
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
@@ -308,6 +309,96 @@ const ThreeScene = (() => {
     });
   }
 
+  // Warm saddle-brown wood texture for the mailbox interior.
+  // Horizontal plank bands + wavy grain strokes, kept subtle so it reads as
+  // "wood" without becoming noisy at this small scale.
+  function makeWoodTexture() {
+    const c = document.createElement("canvas");
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#5c3b26"; // saddle brown base
+    ctx.fillRect(0, 0, 256, 256);
+    // plank bands (horizontal)
+    const bandH = 42;
+    for (let i = 0; i < 7; i++) {
+      const y = i * bandH;
+      ctx.fillStyle = i % 2 ? "rgba(0,0,0,0.08)" : "rgba(255,214,166,0.05)";
+      ctx.fillRect(0, y, 256, bandH);
+      ctx.strokeStyle = "rgba(28,14,7,0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(256, y + 0.5); ctx.stroke();
+    }
+    // wavy grain strokes
+    ctx.strokeStyle = "rgba(35,18,9,0.16)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 70; i++) {
+      const y = Math.random() * 256;
+      const x = Math.random() * 200;
+      const len = 40 + Math.random() * 90;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + len * 0.3, y + (Math.random() - 0.5) * 4,
+                        x + len * 0.7, y + (Math.random() - 0.5) * 4,
+                        x + len, y + (Math.random() - 0.5) * 2);
+      ctx.stroke();
+    }
+    // occasional knot
+    for (let i = 0; i < 3; i++) {
+      const kx = 30 + Math.random() * 196, ky = 30 + Math.random() * 196;
+      ctx.strokeStyle = "rgba(30,15,8,0.28)";
+      ctx.beginPath(); ctx.ellipse(kx, ky, 5, 3, Math.random(), 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(kx, ky, 9, 5.5, Math.random(), 0, Math.PI * 2); ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+
+  // Envelope face texture: cream paper, soft shading, flap V-lines,
+  // optional deep-red wax seal at the flap point.
+  function makeEnvelopeTexture(withSeal) {
+    const c = document.createElement("canvas");
+    c.width = 256; c.height = 180;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#f3e7d0";
+    ctx.fillRect(0, 0, 256, 180);
+    // gentle paper shading (light top-left, warm shadow bottom-right)
+    const g = ctx.createLinearGradient(0, 0, 256, 180);
+    g.addColorStop(0, "rgba(255,255,255,0.30)");
+    g.addColorStop(1, "rgba(150,110,70,0.14)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 180);
+    // flap crease lines: V from top corners to centre
+    ctx.strokeStyle = "rgba(130,95,60,0.5)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(3, 4); ctx.lineTo(128, 92); ctx.lineTo(253, 4);
+    ctx.stroke();
+    // faint flap shadow just under the crease
+    ctx.strokeStyle = "rgba(130,95,60,0.15)";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(6, 10); ctx.lineTo(128, 98); ctx.lineTo(250, 10);
+    ctx.stroke();
+    if (withSeal) {
+      ctx.fillStyle = "#9e3226";
+      ctx.beginPath(); ctx.arc(128, 92, 19, 0, Math.PI * 2); ctx.fill();
+      // seal edge + highlight for a bit of dimension
+      ctx.strokeStyle = "rgba(80,18,12,0.6)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(128, 92, 19, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "rgba(255,235,220,0.22)";
+      ctx.beginPath(); ctx.arc(122, 86, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(80,18,12,0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(128, 92, 11, 0, Math.PI * 2); ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
   function buildMailbox() {
     /* Classic arch-profile mailbox: rectangular lower section + half-cylinder dome on top.
        Opening (+Z face) is the door. Rotated -0.55 rad on Y for a 3/4 camera angle. */
@@ -321,7 +412,9 @@ const ThreeScene = (() => {
 
     const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xc46554 });
     const darkMat  = new THREE.MeshLambertMaterial({ color: 0x8a3020 });
-    const innerMat = new THREE.MeshLambertMaterial({ color: 0x2a1810, side: THREE.DoubleSide });
+    // Interior: warm saddle wood instead of near-black, lit by interiorLight
+    const woodTex = makeWoodTexture();
+    const innerMat = new THREE.MeshLambertMaterial({ map: woodTex, side: THREE.DoubleSide });
     const postMat  = new THREE.MeshLambertMaterial({ color: 0x5a3828 });
     const ironMat  = new THREE.MeshLambertMaterial({ color: 0x2a1810 });
 
@@ -377,47 +470,185 @@ const ThreeScene = (() => {
     outerShell.receiveShadow = true;
     body.add(outerShell);
 
-    // INNER shell — half-cylinder slightly smaller, dark interior
+    // INNER shell — half-cylinder slightly smaller, dark interior.
+    // Its radius must sit clearly inside the outer shell's inner-hole radius
+    // (R - wallT) rather than exactly on it — the flat side panels get this
+    // clearance for free from their own thickness, but this cylinder has no
+    // thickness, so an exactly-coincident radius z-fights with the red shell
+    // and shows through as a reddish curved ceiling.
+    // Depth kept just barely (0.002) short of the shell's full depth, split
+    // evenly at front and back: enough clearance to avoid z-fighting flicker
+    // against the shell's front/back caps, but small enough the recess at
+    // the visible opening edge doesn't read as a dark line.
+    const innerDepth = L - 0.002;
     const domeInner = new THREE.Mesh(
-      new THREE.CylinderGeometry(R - 0.015, R - 0.015, L - 0.01, 40, 1, true, -Math.PI / 2, Math.PI),
+      new THREE.CylinderGeometry(R - 0.019, R - 0.019, innerDepth, 40, 1, true, -Math.PI / 2, Math.PI),
       innerMat
     );
     domeInner.rotation.x = -Math.PI / 2;
     domeInner.position.y = BH;
     body.add(domeInner);
 
-    // Inner side panels (dark lower walls, slightly inset)
-    const innerSideGeo = new THREE.BoxGeometry(0.012, BH, L - 0.01);
-    const innerSideL = new THREE.Mesh(innerSideGeo, innerMat);
-    innerSideL.position.set(-(R - 0.015), BH / 2, 0);
+    // Inner side panels (dark lower walls, slightly inset). Separate geometry
+    // instances (not shared) because each side needs its own custom UVs below.
+    // The REAL seam (not the front-recess gap fixed earlier): the dome sits
+    // at radius R-0.019 but these walls were centered at R-0.015 with 0.012
+    // thickness, so their interior-facing surface (R-0.015 - 0.006 = R-0.021)
+    // sat 0.002 further in than the dome (R-0.019) at one edge and 0.004
+    // proud of it at the other — a permanent step/ridge right at the
+    // wall-to-dome junction that reads as a dark line the whole seam length,
+    // regardless of the front-face recess. Fix: size+center the wall so its
+    // outer face still meets the shell's inner-hole radius (R-0.015, unchanged
+    // shell relationship) while its inner face lands exactly on the dome's
+    // radius (R-0.019) — flush on both sides, no step.
+    const shellInnerR = R - 0.015;
+    const domeR = R - 0.019;
+    // Flush fit: wall's inner face lands exactly on the dome's radius, no
+    // step. (A small inward overlap was tried to hide a grazing-angle
+    // artifact on the left wall, but it created a real ridge visible on the
+    // more face-on right wall — worse trade. Back to exact flush.)
+    const wallT2 = shellInnerR - domeR;
+    const wallCenterR = (shellInnerR + domeR) / 2;
+    const innerSideGeoL = new THREE.BoxGeometry(wallT2, BH, innerDepth);
+    const innerSideL = new THREE.Mesh(innerSideGeoL, innerMat);
+    innerSideL.position.set(-wallCenterR, BH / 2, 0);
     body.add(innerSideL);
-    const innerSideR = new THREE.Mesh(innerSideGeo, innerMat);
-    innerSideR.position.set(R - 0.015, BH / 2, 0);
+    const innerSideGeoR = new THREE.BoxGeometry(wallT2, BH, innerDepth);
+    const innerSideR = new THREE.Mesh(innerSideGeoR, innerMat);
+    innerSideR.position.set(wallCenterR, BH / 2, 0);
     body.add(innerSideR);
+
+    // Continuous wood-grain UVs across the two flat side walls and the
+    // curved dome between them, so the plank bands run as one unbroken sweep
+    // (floor-left-wall → up → over the dome → down → floor-right-wall)
+    // instead of each geometry inventing its own mismatched parameterization.
+    // "s" = arc-length position along that sweep; "depth" = front-to-back.
+    (function unifyWoodUVs() {
+      const wallArc = BH;
+      const domeArc = Math.PI * (R - 0.019);
+      // Match the plank width used on the floor (one tile's 7 bands spread
+      // across the floor's actual width) instead of the walls' own height —
+      // same physical board width everywhere, floor and walls and dome alike.
+      // One full texture tile already contains all 7 bands, so matching the
+      // floor's spacing means one tile per floorW of arc length — NOT one
+      // tile per floorW/7 (that earlier version was 7x too dense).
+      const floorW = (R - 0.015) * 2;
+      const vOf = (s) => s / floorW;
+      const halfDepth = innerDepth / 2;
+      const uOf = (depth) => (depth + halfDepth) / innerDepth;
+
+      function apply(geo, sFn, depthFn) {
+        const posAttr = geo.attributes.position;
+        const uvAttr = geo.attributes.uv;
+        for (let i = 0; i < posAttr.count; i++) {
+          const x = posAttr.getX(i), y = posAttr.getY(i), z = posAttr.getZ(i);
+          uvAttr.setXY(i, uOf(depthFn(x, y, z)), vOf(sFn(x, y, z)));
+        }
+        uvAttr.needsUpdate = true;
+      }
+
+      // Left wall: local y spans -BH/2..BH/2 -> world y 0..BH -> s 0..wallArc.
+      apply(innerSideGeoL, (x, y) => y + BH / 2, (x, y, z) => z);
+      // Right wall: mirrored sweep direction, continuing past the dome.
+      apply(innerSideGeoR, (x, y) => (wallArc + domeArc) + (BH / 2 - y), (x, y, z) => z);
+      // Dome: theta = atan2(x, z) in local (pre-rotation) space runs
+      // -PI/2 (left wall junction) .. +PI/2 (right wall junction); local y is
+      // depth, negated by the mesh's -90 deg X rotation.
+      apply(domeInner.geometry, (x, y, z) => wallArc + (Math.atan2(x, z) + Math.PI / 2) * (R - 0.019), (x, y, z) => -y);
+    })();
 
     // Floor
     const floor = new THREE.Mesh(
-      new THREE.BoxGeometry((R - 0.015) * 2, 0.018, L - 0.01),
+      new THREE.BoxGeometry((R - 0.015) * 2, 0.018, innerDepth),
       innerMat
     );
     floor.position.y = 0.009;
     floor.receiveShadow = true;
     body.add(floor);
 
+    // Floor plank pattern: same wood texture and two-tone banding, turned 90°
+    // from the walls (their boards run front-to-back) so the floor's boards
+    // run side-to-side instead, scaled to exactly one tile across the
+    // floor's actual width rather than stretched/repeated arbitrarily.
+    (function floorUVs() {
+      const floorW = (R - 0.015) * 2;
+      const halfW = floorW / 2;
+      const halfDepth = innerDepth / 2;
+      const pos = floor.geometry.attributes.position;
+      const uv = floor.geometry.attributes.uv;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        // Mirrored (halfW - x instead of x + halfW): reverses which plank
+        // tint sits at the left edge vs. right, for contrast against the
+        // wall color at that corner.
+        uv.setXY(i, (z + halfDepth) / innerDepth, (halfW - x) / floorW);
+      }
+      uv.needsUpdate = true;
+    })();
+
     // Dark back wall — without this the red outer shell back cap shows through
     const backWall = new THREE.Mesh(new THREE.ShapeGeometry(archShape()), innerMat);
     backWall.position.z = -L / 2 + 0.012;
     body.add(backWall);
 
-    // Decorative letter props — cream envelopes sitting on the floor
-    const letterMat = new THREE.MeshLambertMaterial({ color: 0xf5ead8 });
-    const letterGeo = new THREE.BoxGeometry(0.55, 0.008, 0.38);
-    [{ x: -0.05, rz: 0.06 }, { x: 0.00, rz: 0.00 }, { x: 0.06, rz: -0.05 }].forEach(({ x, rz }) => {
-      const letter = new THREE.Mesh(letterGeo, letterMat);
-      letter.position.set(x, 0.022, -0.1);
-      letter.rotation.z = rz;
-      body.add(letter);
+    // Envelope pile — messy but harmonic. Two flat on the floor, two leaning
+    // against the back wall with faces tilted toward the opening, and one
+    // "hero" envelope with a wax seal resting on top, angled up at the camera.
+    // Each envelope is a thin box; the top (+Y) face carries the paper texture
+    // (flap V-lines + optional seal), sides are plain cream.
+    const sealTex = makeEnvelopeTexture(true);
+    const plainTex = makeEnvelopeTexture(false);
+    function makeEnvelope(w, d, tex, tint) {
+      const sideMat = new THREE.MeshLambertMaterial({ color: tint || 0xefe2c8 });
+      const topMat  = new THREE.MeshLambertMaterial({ map: tex, color: tint || 0xffffff });
+      const botMat  = new THREE.MeshLambertMaterial({ color: 0xe4d4b6 });
+      // BoxGeometry material order: +x, -x, +y, -y, +z, -z
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 0.035, d),
+        [sideMat, sideMat, topMat, botMat, sideMat, sideMat]
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+    const envelopes = [
+      // base layer — flat on the floor, loosely crossed
+      { w: 0.52, d: 0.36, tex: plainTex, pile: { x: -0.03, y: 0.037, z: -0.02, rotX: 0, rotY: 11.5, rotZ: 0 } },
+      { w: 0.50, d: 0.34, tex: plainTex, pile: { x: 0.06, y: 0.073, z: 0.10, rotX: 0, rotY: -17.2, rotZ: 0 }, tint: 0xf6ecd9 },
+      // leaning against the back wall, faces tilted toward the opening
+      { w: 0.48, d: 0.34, tex: plainTex, pile: { x: -0.07, y: 0.175, z: -0.40, rotX: 69.9, rotY: 5.7, rotZ: 2.3 }, tint: 0xf2e4cc },
+      { w: 0.42, d: 0.32, tex: sealTex,  pile: { x: 0.07, y: 0.190, z: -0.28, rotX: 60.2, rotY: -12.6, rotZ: -2.9 } },
+      // hero — resting on the base layer, propped up toward the viewer, wax seal
+      { w: 0.50, d: 0.36, tex: sealTex,  pile: { x: 0.00, y: 0.150, z: 0.14, rotX: 31.5, rotY: 4.6, rotZ: 1.1 } }
+    ];
+    // Live-tweakable positions: pull from window.LETTERS_DATA.letters[i].pile
+    // when present (edited via the Tweaks panel) so a saved edit survives a
+    // reload; the literal values above are just the fallback/original layout.
+    // Rotation order YXZ (turn, then tilt, then roll) instead of the three.js
+    // default XYZ — with XYZ, adjusting tilt after turn re-couples axes in a
+    // way that feels broken; YXZ matches how a gimbal/turntable control is
+    // expected to behave (turn sets facing, tilt pivots off that facing, roll
+    // twists around what's now "forward").
+    const deg2rad = (d) => (d || 0) * Math.PI / 180;
+    envelopeMeshes = [];
+    envelopes.forEach(({ w, d, tex, tint, pile: fallbackPile }, i) => {
+      const letterData = window.LETTERS_DATA && window.LETTERS_DATA.letters && window.LETTERS_DATA.letters[i];
+      const pile = (letterData && letterData.pile) || fallbackPile;
+      const env = makeEnvelope(w, d, tex, tint);
+      env.position.set(pile.x, pile.y, pile.z);
+      env.rotation.order = "YXZ";
+      env.rotation.set(deg2rad(pile.rotX), deg2rad(pile.rotY), deg2rad(pile.rotZ));
+      body.add(env);
+      envelopeMeshes.push(env);
     });
+
+    // Interior light — dim, soft, candle-like: gentle falloff (low decay),
+    // wider reach, warm but desaturated so it doesn't look like a bulb.
+    // Position is Tweaks-adjustable too (see setLightPosition).
+    const lp = (window.LETTERS_DATA && window.LETTERS_DATA.lightPos) || { x: 0, y: 0.34, z: 0.08 };
+    interiorLight = new THREE.PointLight(0xffd9ae, 0, 2.4, 1.6);
+    interiorLight.position.set(lp.x, lp.y, lp.z);
+    body.add(interiorLight);
 
     // DOOR GROUP — hinge at y=0, front face at z=L/2, swings on X axis
     doorGroup = new THREE.Group();
@@ -510,6 +741,23 @@ const ThreeScene = (() => {
 
   function setDoorOpen(t) { doorTarget = t; }
 
+  // Live-update one envelope's transform from the Tweaks panel. rotX/Y/Z are
+  // in degrees (friendlier for a slider than radians); index matches the
+  // letter's position in window.LETTERS_DATA.letters.
+  function setEnvelopePile(i, pile) {
+    const env = envelopeMeshes[i];
+    if (!env) return;
+    const d2r = (d) => (d || 0) * Math.PI / 180;
+    env.position.set(pile.x, pile.y, pile.z);
+    env.rotation.set(d2r(pile.rotX), d2r(pile.rotY), d2r(pile.rotZ));
+  }
+
+  // Live-update the interior light's position from the Tweaks panel.
+  function setLightPosition(pos) {
+    if (!interiorLight) return;
+    interiorLight.position.set(pos.x, pos.y, pos.z);
+  }
+
   function onMailboxClick(cb) { onClickCb = cb; }
 
   function easeInOutCubic(x) {
@@ -531,6 +779,9 @@ const ThreeScene = (() => {
     doorCurrent += doorVelocity;
     if (doorCurrent < 0) { doorCurrent = 0; if (doorVelocity < 0) doorVelocity *= -0.12; }
     doorGroup.rotation.x = doorCurrent * (Math.PI * 0.95);
+
+    // interior glow follows the door — closed box is dark, open box glows warm
+    if (interiorLight) interiorLight.intensity = Math.max(0, doorCurrent) * 0.7;
 
     // camera animation
     if (camAnim) {
@@ -565,7 +816,16 @@ const ThreeScene = (() => {
     renderer.dispose();
   }
 
-  return { init, onMailboxClick, cameraTo, setDoorOpen, dispose };
+  // Dev helper: jump the camera to an arbitrary pos/look instantly (used for
+  // trying out framing options; safe to leave in, nothing calls it in prod).
+  function _debugCam(pos, look) {
+    camAnim = null;
+    camera.position.set(...pos);
+    currentLook.set(...look);
+    camera.lookAt(currentLook);
+  }
+
+  return { init, onMailboxClick, cameraTo, setDoorOpen, setEnvelopePile, setLightPosition, dispose, _debugCam };
 })();
 
 window.ThreeScene = ThreeScene;
