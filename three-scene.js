@@ -356,100 +356,92 @@ const ThreeScene = (() => {
   }
 
   function buildMountains() {
-    // Smooth ridge silhouettes using the midpoint-quadratic method:
-    // each "peak" point is a bezier control point; the curve passes through
-    // midpoints between consecutive peaks, giving smooth slopes with
-    // natural-feeling summits rather than sharp spikes.
-    // MeshBasicMaterial (no lighting) makes fog blend predictably —
-    // distant layers fade directly into the warm peach horizon.
-    function makeRidge(pts, baseY) {
-      const s = new THREE.Shape();
-      s.moveTo(pts[0][0], baseY);
-      s.lineTo(pts[0][0], pts[0][1]);
-      for (let i = 0; i < pts.length - 1; i++) {
-        const mx = (pts[i][0] + pts[i+1][0]) / 2;
-        const my = (pts[i][1] + pts[i+1][1]) / 2;
-        s.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
-      }
-      const last = pts[pts.length - 1];
-      s.lineTo(last[0], last[1]);
-      s.lineTo(last[0], baseY);
-      s.closePath();
-      return s;
-    }
+    /* Real 3D ranges instead of flat cutouts: each range is a horizontal
+       terrain strip displaced upward with ridged noise. Sun-facing slopes
+       catch the DirectionalLight, away slopes fall to ambient — that
+       surface variation is what the old silhouettes couldn't do.
+       The far range stays UNLIT (MeshBasic) with its shading painted into
+       vertex colors: at that distance it's ~80% fog anyway, and unlit
+       materials fade into the peach horizon predictably (same reasoning as
+       the old cutouts). */
+    const paintLightDir = new THREE.Vector3(6, 3, 0).normalize(); // matches the real sun
 
-    const layers = [
-      {
-        // Front foothills — deep warm purple silhouette just behind the lake
-        z: -90,
-        rocky: 0x3a1e1c,
-        forest: 0x364e34,
-        forestRatio: 0.4, // treeline height as a fraction of each peak — keeps the same curve, just shorter
-        pts: [
-          [-92,0],[-76,7],[-60,18],[-46,11],[-32,24],[-18,15],[-4,28],
-          [10,18],[24,14],[38,21],[52,12],[66,17],[78,8],[92,0]
-        ]
-      },
-      {
-        // Main range — warm mauve, dominant peaks left of centre, taper right
-        z: -105,
-        rocky: 0x461C14,
-        forest: 0x473227,
-        forestRatio: 0.38,
-        pts: [
-          [-94,2],[-78,12],[-62,26],[-46,16],[-30,40],[-14,26],
-          [0,48],[14,36],[28,50],[42,36],[56,22],[68,14],[80,9],[94,2]
-        ]
-      },
-      {
-        // Distant range — warm rose-gray, fog blends it into peach horizon
-        z: -145,
-        rocky: 0x9a7880,
-        forest: 0x6e5868,
-        forestRatio: 0.35,
-        pts: [
-          [-141,3],[-125,14],[-107,28],[-89,18],[-69,38],[-49,26],
-          [-29,42],[-9,28],[9,36],[27,20],[43,10],[51,3]
-        ]
+    function makeRange(cfg) {
+      const geo = new THREE.PlaneGeometry(cfg.w, cfg.d, cfg.sw, cfg.sd);
+      geo.rotateX(-Math.PI / 2);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        // crest runs along the strip's middle; height tapers to 0 at the
+        // front/back edges so the range rises cleanly out of the water
+        const dp = Math.sin(Math.PI * (z / cfg.d + 0.5));
+        // ridged noise: sharp crests, rounded valleys
+        const n = fbm2(x / 18 + cfg.seed, (z + cfg.z) / 18 + cfg.seed * 2.7, 3);
+        const ridge = Math.pow(1 - Math.abs(2 * n - 1), 1.5);
+        const rough = 0.85 + 0.3 * fbm2(x / 5 + cfg.seed * 3.3, (z + cfg.z) / 5, 2);
+        pos.setY(i, cfg.envelope(x) * dp * ridge * rough * cfg.peak);
       }
-    ];
+      geo.computeVertexNormals();
 
-    // Darkens each ridge toward its base with a vertex-color gradient — a
-    // fake contact shadow where it tucks behind the layer in front of it,
-    // for a sense of depth instead of flat cutout color.
-    function applyBaseShadow(mesh, colorHex, baseY, shadowHeight) {
-      const pos = mesh.geometry.attributes.position;
+      // altitude bands: forest low → rock mid → warm snow above a jittered
+      // snowline (never pure white — it's catching sunset light)
       const colors = new Float32Array(pos.count * 3);
-      const base = new THREE.Color(colorHex);
-      const shadow = base.clone().multiplyScalar(0.45);
+      const nor = geo.attributes.normal;
+      const cForest = new THREE.Color(cfg.forest);
+      const cRock = new THREE.Color(cfg.rock);
+      const cSnow = cfg.snow ? new THREE.Color(cfg.snow) : null;
       const c = new THREE.Color();
       for (let i = 0; i < pos.count; i++) {
-        const t = THREE.MathUtils.clamp((pos.getY(i) - baseY) / shadowHeight, 0, 1);
-        c.copy(shadow).lerp(base, t);
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        // bands are relative to each column's own summit height, so snow
+        // reads as caps on the crests, not one absolute-height wall
+        const colMax = Math.max(cfg.envelope(x), 0.001) * cfg.peak;
+        const rel = y / colMax; // 0 at base .. ~1 near a crest
+        const jit = (fbm2(x / 7 + 3.1, (z + cfg.z) / 7 + 8.8, 2) - 0.5) * 0.28;
+        c.copy(cForest).lerp(cRock, sstep(0.15, 0.48, rel + jit * 0.6));
+        if (cSnow) c.lerp(cSnow, sstep(0.70, 0.84, rel + jit));
+        if (!cfg.lit) {
+          // matte-painted shading for the unlit far range
+          const ndl = Math.max(0, nor.getX(i) * paintLightDir.x + nor.getY(i) * paintLightDir.y + nor.getZ(i) * paintLightDir.z);
+          c.multiplyScalar(0.78 + 0.35 * ndl);
+        }
         colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
       }
-      mesh.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-      mesh.material.vertexColors = true;
-      mesh.material.color.set(0xffffff);
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+      const mat = cfg.lit
+        // low warm emissive floor so shadow-side slopes never go muddy
+        // against the peach fog
+        ? new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x5a3830, emissiveIntensity: 0.22 })
+        : new THREE.MeshBasicMaterial({ vertexColors: true });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(0, -1.2, cfg.z); // base tucked under the water
+      scene.add(mesh);
     }
 
-    layers.forEach(({ z, rocky, forest, forestRatio, pts }) => {
-      const ridgeMesh = new THREE.Mesh(
-        new THREE.ShapeGeometry(makeRidge(pts, -4)),
-        new THREE.MeshBasicMaterial({ color: rocky, fog: true, side: THREE.DoubleSide })
-      );
-      ridgeMesh.position.z = z;
-      applyBaseShadow(ridgeMesh, rocky, -4, 6);
-      scene.add(ridgeMesh);
-
-      const fPts = pts.map(([x, y]) => [x, y * forestRatio]);
-      const forestMesh = new THREE.Mesh(
-        new THREE.ShapeGeometry(makeRidge(fPts, -4)),
-        new THREE.MeshBasicMaterial({ color: forest, fog: true, side: THREE.DoubleSide })
-      );
-      forestMesh.position.z = z + 0.5;
-      scene.add(forestMesh);
-    });
+    /* envelope(x) composes the frame — in WORLD x, and the camera looks
+       diagonally: at mountain depth the screen centre is around world
+       x ≈ −55 (desktop). So "tall on the right of the frame" means
+       x ∈ [−45, +10], and the sun gap (low horizon + water) sits around
+       x ≈ −75, which stays visible on portrait phones too. */
+    const ranges = [
+      { // near foothills — the mid-distance coastline ridge, frame right
+        w: 240, d: 50, sw: 120, sd: 20, z: -92, peak: 22, seed: 11.7, lit: true,
+        forest: 0x3c4a30, rock: 0x5f4a3e, snow: null,
+        envelope: (x) => 0.9 * sstep(-30, 5, x)
+      },
+      { // main range — dominant snow-capped peaks, right half of the frame
+        w: 280, d: 55, sw: 128, sd: 22, z: -112, peak: 32, seed: 4.2, lit: true,
+        forest: 0x473227, rock: 0x7d5f58, snow: 0xf6ddd0,
+        envelope: (x) => 0.12 + 0.88 * sstep(-52, -6, x)
+      },
+      { // far range — haze-eaten wall on the right, low hills across the gap
+        w: 340, d: 60, sw: 90, sd: 14, z: -148, peak: 42, seed: 27.9, lit: false,
+        forest: 0x8a7078, rock: 0x9a7880, snow: 0xeecfc8,
+        envelope: (x) => 0.28 + 0.72 * sstep(-55, 5, x)
+      }
+    ];
+    ranges.forEach(makeRange);
   }
 
   // Warm saddle-brown wood texture for the mailbox interior.
