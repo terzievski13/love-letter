@@ -30,6 +30,13 @@ const ThreeScene = (() => {
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
   let currentLook = new THREE.Vector3(0, 1.6, 0);
 
+  // Per-frame landscape animations (water drift, sun pulse, boat...).
+  // Each module pushes its own tick; cutting a module removes its motion.
+  const tickers = [];
+  function updateLandscape(t) {
+    for (let i = 0; i < tickers.length; i++) tickers[i](t);
+  }
+
   // door rotation
   let doorTarget = 0;
   let doorCurrent = 0;
@@ -63,6 +70,7 @@ const ThreeScene = (() => {
     buildWater();
     buildGround();
     buildMountains();
+    buildSun();
     buildMailbox();
     buildLights();
 
@@ -154,11 +162,12 @@ const ThreeScene = (() => {
   }
 
   function buildWater() {
-    // Warm sunset lake — gradient canvas texture, starts behind the shore edge at z=-10
+    // Base water: same palette gradient as before. The ripples and glitter
+    // moved out of the base into animated overlays — all motion is texture
+    // offset scrolling, zero per-frame canvas uploads.
     const c = document.createElement("canvas");
     c.width = 256; c.height = 256;
     const ctx = c.getContext("2d");
-    // gradient runs top (far) to bottom (near shore)
     const g = ctx.createLinearGradient(0, 0, 0, 256);
     g.addColorStop(0.00, "#1e3248"); // deep blue far horizon
     g.addColorStop(0.30, "#2e5070"); // rich mid-lake blue
@@ -166,37 +175,119 @@ const ThreeScene = (() => {
     g.addColorStop(1.00, "#68a8c4"); // clean near-shore blue
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
-    // warm sun glitter streak — back to its original spot (outside the
-    // visible strip), so the water reads as plain blue like before
-    const sg = ctx.createRadialGradient(128, 70, 4, 128, 70, 80);
-    sg.addColorStop(0, "rgba(255,210,130,0.40)");
-    sg.addColorStop(1, "rgba(255,210,130,0)");
-    ctx.fillStyle = sg;
-    ctx.fillRect(0, 0, 256, 256);
-    // Ripple lines — same style as the main branch (short straight strokes,
-    // cool blue-white), kept inside the ~46px band that's actually visible
-    // on screen here (the shore hides everything past y≈187, the mountains
-    // hide everything before y≈141) — main's own random full-canvas
-    // placement would mostly land somewhere hidden in this scene's geometry.
-    ctx.strokeStyle = "rgba(200,230,255,0.18)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 30; i++) {
-      const wy = 141 + Math.random() * 46;
-      ctx.beginPath();
-      ctx.moveTo(Math.random() * 256, wy);
-      ctx.lineTo(Math.random() * 256 + 40, wy);
-      ctx.stroke();
-    }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    // Large plane centered well behind the shore so it fills the background
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(600, 400),
       new THREE.MeshBasicMaterial({ map: tex, fog: true })
     );
     water.rotation.x = -Math.PI / 2;
-    water.position.set(0, -0.05, -100); // slightly below ground level, far back
+    water.position.set(0, -0.09, -100);
     scene.add(water);
+
+    // Tiling ripple-dash tile; dashes drawn three times (x, x±128) so the
+    // texture wraps seamlessly when it scrolls.
+    function makeRippleTexture(seed, count) {
+      const rc = document.createElement("canvas");
+      rc.width = rc.height = 128;
+      const rctx = rc.getContext("2d");
+      for (let i = 0; i < count; i++) {
+        const y = Math.floor(hash2(seed, i * 7.3) * 128);
+        const x = Math.floor(hash2(seed * 3.1, i * 2.9) * 128);
+        const len = 18 + hash2(seed * 1.7, i * 5.1) * 42;
+        const a = 0.15 + hash2(seed * 2.3, i * 3.7) * 0.3;
+        rctx.fillStyle = "rgba(210,235,255," + a.toFixed(2) + ")";
+        rctx.fillRect(x - 64, y, len, 2);
+        rctx.fillRect(x - 64 + 128, y, len, 2);
+        rctx.fillRect(x - 64 - 128, y, len, 2);
+      }
+      const t = new THREE.CanvasTexture(rc);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return t;
+    }
+
+    // Two overlays at different tilings scrolling opposite ways — layered
+    // shimmer without a shader.
+    [
+      { seed: 5.7, count: 26, rep: [10, 7], y: -0.03, opacity: 0.28, speed: 0.010 },
+      { seed: 9.2, count: 18, rep: [6, 4],  y: -0.05, opacity: 0.20, speed: -0.007 }
+    ].forEach((o) => {
+      const t = makeRippleTexture(o.seed, o.count);
+      t.repeat.set(o.rep[0], o.rep[1]);
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(600, 400),
+        new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: o.opacity, depthWrite: false, fog: true })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(0, o.y, -100);
+      scene.add(m);
+      tickers.push((time) => { t.offset.x = time * o.speed; });
+    });
+
+    // Warm glitter path on the water, running from under the sun toward the
+    // shore. Additive and fog-free (fog would gray the sparkle out) — the
+    // one deliberate fog exception in the landscape.
+    const sc = document.createElement("canvas");
+    sc.width = 64; sc.height = 256;
+    const sctx = sc.getContext("2d");
+    for (let i = 0; i < 150; i++) {
+      const v = Math.random();                    // 0 = shore end, 1 = sun end
+      const py = Math.floor((1 - v) * 250);       // canvas top row is v=1
+      const spread = 26 - 16 * v;                 // narrows toward the sun
+      const px = 32 + (Math.random() - 0.5) * spread;
+      const a = (0.12 + 0.55 * v * v) * (1 - Math.abs(px - 32) / (spread * 0.6 + 4));
+      if (a <= 0.02) continue;
+      sctx.fillStyle = "rgba(255,215,140," + Math.min(a, 0.8).toFixed(2) + ")";
+      sctx.fillRect(Math.floor(px - 3 - Math.random() * 4), py, 7 + Math.floor(Math.random() * 9), 2);
+    }
+    const stex = new THREE.CanvasTexture(sc);
+    stex.colorSpace = THREE.SRGBColorSpace;
+    const sgeo = new THREE.PlaneGeometry(6, 115);
+    sgeo.rotateX(-Math.PI / 2);
+    const smat = new THREE.MeshBasicMaterial({
+      map: stex, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, fog: false
+    });
+    const streak = new THREE.Mesh(sgeo, smat);
+    // long axis aimed from the sun (−75, −130) toward the camera side
+    streak.rotation.y = 0.52;
+    streak.position.set(-46.5, -0.02, -80);
+    scene.add(streak);
+    tickers.push((time) => { smat.opacity = 0.78 + 0.22 * Math.sin(time * 0.6); });
+  }
+
+  function buildSun() {
+    // Low setting sun in the mountain gap: a hot disc + a wide soft halo.
+    // Both fog-free sprites; the water plane in front clips the disc's lower
+    // half, so it reads as sitting ON the horizon at its own depth.
+    function glowTexture(stops) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const ctx = c.getContext("2d");
+      const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
+      stops.forEach(([p, col]) => g.addColorStop(p, col));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 128, 128);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    }
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture([[0, "rgba(255,205,150,0.55)"], [0.45, "rgba(255,190,130,0.22)"], [1, "rgba(255,190,130,0)"]]),
+      transparent: true, depthWrite: false, fog: false
+    }));
+    halo.position.set(-75, 6, -131);
+    halo.scale.set(46, 46, 1);
+    scene.add(halo);
+
+    const sun = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture([[0, "rgba(255,246,221,1)"], [0.35, "rgba(255,228,175,0.95)"], [0.55, "rgba(255,205,145,0.30)"], [1, "rgba(255,205,145,0)"]]),
+      transparent: true, depthWrite: false, fog: false
+    }));
+    sun.position.set(-75, 2.8, -130);
+    sun.scale.set(14, 14, 1);
+    scene.add(sun);
   }
 
   /* ---- Terrain shape: single source of truth ----
@@ -906,6 +997,7 @@ const ThreeScene = (() => {
     raf = requestAnimationFrame(animate);
     const now = performance.now();
     const t = now * 0.001;
+    updateLandscape(t);
 
     // door spring — slight overshoot gives a satisfying mechanical settle
     const springForce = (doorTarget - doorCurrent) * 0.045;
