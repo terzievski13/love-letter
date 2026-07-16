@@ -73,6 +73,8 @@ const ThreeScene = (() => {
     buildSun();
     buildScatter();
     buildPines();
+    buildLighthouse();
+    buildSailboat();
     buildMailbox();
     buildLights();
 
@@ -725,6 +727,131 @@ const ThreeScene = (() => {
     const small = pine(1.05, -0.05, 0.03);
     small.position.set(-3.6, groundHeight(-3.6, -1.6), -1.6);
     scene.add(small);
+  }
+
+  function buildLighthouse() {
+    /* Tiny lighthouse + village on a rocky islet in the right-hand bay,
+       in the open water IN FRONT of the foothill ridge (the ridge strip
+       starts at z=−67 — anything deeper is swallowed by it). The sailboat's
+       lane (z=−55) passes just behind the islet. Each piece is deliberately
+       low-poly; fog does the distance work. Cut the whole thing by removing
+       the buildLighthouse() call. */
+    const g = new THREE.Group();
+    g.position.set(1.5, 0, -52);
+    g.scale.setScalar(0.85);
+    scene.add(g);
+
+    // rocky outcrop rising from the water
+    const rock = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 10, 8),
+      new THREE.MeshLambertMaterial({ color: 0x5f4636 })
+    );
+    rock.scale.set(3.4, 2.1, 2.6);
+    rock.position.y = -0.6;
+    g.add(rock);
+
+    // tower: white with red bands painted into a tiny canvas
+    const bc = document.createElement("canvas");
+    bc.width = 8; bc.height = 64;
+    const bctx = bc.getContext("2d");
+    bctx.fillStyle = "#f4ece0";
+    bctx.fillRect(0, 0, 8, 64);
+    bctx.fillStyle = "#c04c38";
+    bctx.fillRect(0, 8, 8, 12);
+    bctx.fillRect(0, 34, 8, 12);
+    const btex = new THREE.CanvasTexture(bc);
+    btex.colorSpace = THREE.SRGBColorSpace;
+    const tower = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.5, 2.6, 8),
+      new THREE.MeshLambertMaterial({ map: btex })
+    );
+    tower.position.y = 2.75;
+    g.add(tower);
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(0.44, 0.5, 8),
+      new THREE.MeshLambertMaterial({ color: 0x8a3020 })
+    );
+    roof.position.y = 4.3;
+    g.add(roof);
+    // one warm lit window near the top — a lamp, not a light source
+    const lamp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: (() => {
+        const lc = document.createElement("canvas");
+        lc.width = lc.height = 32;
+        const lctx = lc.getContext("2d");
+        const lg = lctx.createRadialGradient(16, 16, 2, 16, 16, 15);
+        lg.addColorStop(0, "rgba(255,224,160,1)");
+        lg.addColorStop(0.5, "rgba(255,200,120,0.5)");
+        lg.addColorStop(1, "rgba(255,200,120,0)");
+        lctx.fillStyle = lg;
+        lctx.fillRect(0, 0, 32, 32);
+        const t = new THREE.CanvasTexture(lc);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      })(),
+      transparent: true, depthWrite: false
+    }));
+    lamp.position.y = 3.95;
+    lamp.scale.set(0.7, 0.7, 1);
+    g.add(lamp);
+
+    // handful of village houses tucked on the islet around the tower
+    const houseMat = new THREE.MeshLambertMaterial({ color: 0xe8d8bc });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0xa04434 });
+    [[-1.5, 0.4], [-0.9, -0.7], [1.2, 0.6], [1.7, -0.4], [0.4, 1.0]].forEach(([hx, hz], i) => {
+      const hh = 0.3 + hash2(41.7, i) * 0.12;
+      const hw = 0.34 + hash2(43.9, i) * 0.1;
+      // approximate the dome's local top height so houses hug the rock
+      const domeY = -0.6 + 2.1 * Math.sqrt(Math.max(0, 1 - (hx / 3.4) ** 2 - (hz / 2.6) ** 2));
+      const house = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, hw * 0.9), houseMat);
+      house.position.set(hx, domeY - 0.08 + hh / 2, hz);
+      house.rotation.y = hash2(47.3, i) * Math.PI;
+      g.add(house);
+      const hroof = new THREE.Mesh(new THREE.ConeGeometry(hw * 0.78, hh * 0.8, 4), roofMat);
+      hroof.position.set(hx, domeY - 0.08 + hh + hh * 0.4, hz);
+      hroof.rotation.y = house.rotation.y + Math.PI / 4;
+      g.add(hroof);
+    });
+  }
+
+  function buildSailboat() {
+    // Tiny boat drifting across the bay at z≈−55. Unlit warm colors so fog
+    // blends it predictably; bob + drift ticked from updateLandscape.
+    const boat = new THREE.Group();
+    const hull = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.32, 0.32, 1.5, 8, 1, false, Math.PI, Math.PI),
+      new THREE.MeshBasicMaterial({ color: 0x4a3226, fog: true })
+    );
+    hull.rotation.z = Math.PI / 2; // half-cylinder opening up = hull shell
+    hull.scale.set(1, 1, 0.55);
+    boat.add(hull);
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.025, 1.5, 5),
+      new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
+    );
+    mast.position.y = 0.75;
+    boat.add(mast);
+    // a sail genuinely is a plane — one triangle
+    const sailGeo = new THREE.BufferGeometry();
+    sailGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+      0.05, 0.25, 0, 0.05, 1.45, 0, 0.85, 0.35, 0
+    ]), 3));
+    sailGeo.computeVertexNormals();
+    const sail = new THREE.Mesh(
+      sailGeo,
+      new THREE.MeshBasicMaterial({ color: 0xfff2e0, side: THREE.DoubleSide, fog: true })
+    );
+    boat.add(sail);
+    boat.position.set(-30, -0.02, -55);
+    boat.rotation.y = Math.PI * 0.08;
+    scene.add(boat);
+    tickers.push((t) => {
+      // −45 → +30 over ~4 minutes; both ends are outside the frame, so the
+      // wrap-around teleport is never visible
+      boat.position.x = -45 + ((t * 0.3125) % 75);
+      boat.rotation.z = Math.sin(t * 0.8) * 0.03;
+      boat.position.y = -0.02 + Math.sin(t * 0.55) * 0.015;
+    });
   }
 
   // Warm saddle-brown wood texture for the mailbox interior.

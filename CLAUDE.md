@@ -77,36 +77,60 @@ them. Leave these alone.
 - Mailbox model itself (arch shape, hollow shell, letter props inside)
   is unchanged across every branch — only the landscape around it varies
 
-## Currently needs work on `picnic-dome` (the active branch)
+## Current state of `picnic-dome` (the active branch)
 
-1. **Mountains need real depth/texture.** They're currently flat 2D
-   silhouettes (`ShapeGeometry` ridge outlines, 3 depth layers, quadratic
-   Bezier curves for smooth summits instead of `main`'s spiky cones).
-   The smoother shape reads better than `main`'s triangles, but flat
-   color layering looks like cardboard cutouts — "something that
-   couldn't exist in real life." Needs actual surface variation, not
-   just silhouette color/fog layering.
-2. **Color palette** — already leaning warmer than `main` (deep
-   red-orange top of sky at #b84830 down to warm peach horizon at
-   #eeb890) per feedback that `main`'s warm tones read better than
-   earlier daytime-blue experiments. Confirm this still reads right
-   once the mountain texture pass is done — colors and texture affect
-   each other.
-3. **Mailbox model** — keep red American tube shape. Proportions and 
-   material could be improved but not urgent.
+The July 2026 "Sunset Headland" rebuild (7 phases, one commit each)
+replaced the whole landscape; the mailbox/letter/camera systems were
+untouched. What the scene is now:
+
+- **Terrain**: rolling grassy headland dropping into the sea, shaped by
+  a single `groundHeight(x,z)` function in three-scene.js. There is a
+  dead-flat plateau (exactly y=0) within r≈2.8 of the origin — the
+  mailbox, its shadow, and the camera look-at depend on it. EVERY new
+  object placed on the ground must use `groundHeight` for its y.
+- **Mountains**: three real 3D displaced-terrain strips (ridged noise,
+  lit Lambert with a warm emissive floor; the far range is unlit
+  MeshBasic with painted shading so fog fades it predictably). The old
+  cardboard-cutout problem is fixed. Composition note: the camera looks
+  diagonally, so at mountain depth "screen centre" is world x≈−55 and
+  the sun gap lives at x≈−75.
+- **Water**: gradient base plane + two tiling ripple overlays scrolling
+  via texture offsets + additive fog-free glitter streak + sun disc and
+  halo sprites at (−75, −130). All landscape motion runs through the
+  `tickers` array → `updateLandscape(t)` (one line in `animate()`).
+- **Foreground**: instanced stepping stones on a bezier path, smooth
+  jittered-sphere boulders, chunky flowers, squat grass-tuft cones; two
+  stacked-cone pines frame the left. All shadow-casters sit inside the
+  sun's ±10 shadow box — don't place casters outside it (their shadows
+  silently vanish) and don't widen the box (blurs the mailbox shadow).
+- **Story details**: lighthouse islet + tiny village at (1.5, −52) —
+  must stay in FRONT of the foothill ridge strip (z ≥ −67) or it gets
+  swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.
+  Each is one function call in init(); trivial to cut.
+
+Possible next tweaks (user has not reviewed the rebuild yet):
+1. Snow caps / rock hues on the main range may want tuning once seen
+   on a real screen — bands are relative to each summit (see
+   makeRange), tweak the sstep thresholds.
+2. Glitter streak is subtle; bump dash alpha in buildWater if wanted.
+3. Mailbox model proportions/material — unchanged, not urgent.
 
 ## Landscape design decisions (confirmed, `picnic-dome`)
 
 - Scene mood: warm sunset, NOT "A Short Hike" style (too game-y).
 - Ground fills more of the frame than a typical reference photo would (wanted)
-- Mailbox stays centred
+- Mailbox stays centred, on flat ground
 - Sky gradient (top → horizon): #b84830 → #e07040 → #f0a868 → #eeb890
 - Water: deep blue far (#1e3248) → clean near-shore blue (#68a8c4), warm glitter streak
-- Mountains: 3 layers, smooth quadratic-ridge silhouettes, warm rocky
-  tones (#3a2e40 near → #9a7880 far) with darker "forest" bands underneath
-  the ridgeline, fog blends distant layers into the peach horizon
-- Grass blades removed — thin PlaneGeometry looks like floating 
-  matchsticks from this camera angle at any density; don't retry this
+- Mountains: real lit geometry (see above), warm rock tones, warm-tinted
+  snow (#f6ddd0 — never pure white), fog kept at (30, 175)
+- Grass blades: thin PlaneGeometry blades are still banned ("floating
+  matchsticks") — current grass detail is painted ground texture plus
+  squat SOLID cone tufts, a different technique that reads fine. Never
+  reintroduce thin planes.
+- Canvas-texture gotcha learned the hard way: THREE.Color stores hex as
+  LINEAR; call convertLinearToSRGB() before writing pixels to a canvas
+  that becomes an sRGB texture, or every color double-darkens.
 
 ## Future ideas (don't build yet)
 
