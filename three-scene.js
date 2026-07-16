@@ -72,6 +72,7 @@ const ThreeScene = (() => {
     buildMountains();
     buildSun();
     buildScatter();
+    buildPines();
     buildMailbox();
     buildLights();
 
@@ -668,6 +669,37 @@ const ThreeScene = (() => {
     tuftGeo.translate(0, 0.042, 0);
     place(new THREE.InstancedMesh(
       tuftGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), tufts.length), tufts);
+  }
+
+  function buildPines() {
+    // Two stylized pines frame the left of the frame (from the outside
+    // camera, "left" = world −x). Trunk + three stacked smooth cones.
+    // Both sit inside the sun's ±10 shadow box so they cast real shadows.
+    function pine(scale, tiltZ, tiltX) {
+      const g = new THREE.Group();
+      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3020 });
+      const leafMat = new THREE.MeshLambertMaterial({ color: 0x2c4630 });
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.10, 0.55, 6), trunkMat);
+      trunk.position.y = 0.275;
+      trunk.castShadow = true;
+      g.add(trunk);
+      [[0.6, 0.95, 0.78], [0.45, 0.8, 1.28], [0.3, 0.65, 1.72]].forEach(([r, h, y]) => {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), leafMat);
+        cone.position.y = y;
+        cone.castShadow = true;
+        g.add(cone);
+      });
+      g.scale.setScalar(scale);
+      g.rotation.z = tiltZ;
+      g.rotation.x = tiltX;
+      return g;
+    }
+    const big = pine(1.5, 0.04, -0.02);
+    big.position.set(-4.2, groundHeight(-4.2, 1.2), 1.2);
+    scene.add(big);
+    const small = pine(1.05, -0.05, 0.03);
+    small.position.set(-3.6, groundHeight(-3.6, -1.6), -1.6);
+    scene.add(small);
   }
 
   // Warm saddle-brown wood texture for the mailbox interior.
