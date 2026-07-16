@@ -701,39 +701,46 @@ const ThreeScene = (() => {
       }
     }
     let ck = 0;
-    // escorts down both sides of the path — short near the dirt
-    for (let i = 0; i < 11; i++) {
-      const t = 0.1 + i * 0.082;
+    // escorts down both sides of the path — a near-continuous fringe,
+    // short near the dirt with a taller second row behind
+    for (let i = 0; i < 14; i++) {
+      const t = 0.08 + i * 0.066;
       [1, -1].forEach((side) => {
         const [x, z] = pathSide(t, side * (0.95 + hash2(71.3, ck) * 0.35));
         addClump(x, z, 0.75, ck++);
+        if (i % 2 === 0) {
+          const [x2, z2] = pathSide(t + 0.03, side * (1.55 + hash2(73.9, ck) * 0.4));
+          addClump(x2, z2, 1.0, ck++);
+        }
       });
     }
     // tall companions around every rock group
     rockGroups.forEach(([gx, gz, [s0]]) => {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         const a = hash2(gx * 3.1, gz * 5.7 + i) * Math.PI * 2;
-        const r = s0 + 0.28 + hash2(gz * 2.9, i) * 0.25;
+        const r = s0 + 0.28 + hash2(gz * 2.9, i) * 0.3;
         addClump(gx + Math.cos(a) * r, gz + Math.sin(a) * r, 1.3, ck++);
       }
     });
-    // tall drift along the cliff lip (silhouettes against the water)
-    for (let i = 0; i < 13; i++) {
-      const x = -7.6 + i * 1.35 + (hash2(41.3, i) - 0.5) * 0.6;
-      const z = -7.2 + Math.sin(i * 0.55) * 0.5 + (hash2(43.7, i) - 0.5) * 0.4;
-      addClump(x, z, 1.25, ck++);
+    // tall double drift along the cliff lip — tufts should break the
+    // horizon line against the water almost continuously, like the board
+    for (let i = 0; i < 20; i++) {
+      const x = -8.2 + i * 0.95 + (hash2(41.3, i) - 0.5) * 0.55;
+      const z = -7.2 + Math.sin(i * 0.55) * 0.45 + (hash2(43.7, i) - 0.5) * 0.4;
+      addClump(x, z, 1.15 + 0.3 * hash2(45.1, i), ck++);
+      if (i % 2 === 1) addClump(x + 0.4, z + 0.75, 0.9, ck++);
     }
     // clusters over the knoll flanks — lush, like the board
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 22; i++) {
       const a = hash2(53.9, i * 3.7) * Math.PI * 2;
-      const r = 3.2 + hash2(57.1, i * 1.9) * 2.2;
+      const r = 3.2 + hash2(57.1, i * 1.9) * 2.4;
       const cx = Math.cos(a) * r, cz = Math.sin(a) * r;
-      for (let j = 0; j < 3; j++) {
-        addClump(cx + (hash2(i, j * 7.7) - 0.5) * 0.9, cz + (hash2(j, i * 5.3) - 0.5) * 0.9, 1.0, ck++);
+      for (let j = 0; j < 4; j++) {
+        addClump(cx + (hash2(i, j * 7.7) - 0.5) * 1.1, cz + (hash2(j, i * 5.3) - 0.5) * 1.1, 1.0, ck++);
       }
     }
     // paired fillers further out
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 32; i++) {
       const a = hash2(63.7, i * 2.3) * Math.PI * 2;
       const r = 4.5 + hash2(67.9, i * 4.1) * 3.8;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
@@ -748,25 +755,29 @@ const ThreeScene = (() => {
     // cluster centers on the knoll flanks (heaviest beside the path, like
     // the board), near the big rocks, along the cliff lip inner side
     const flowerClusters = [
-      { at: pathSide(0.25, 1.4), kind: "daisy", n: 7 },
-      { at: pathSide(0.5, -1.5), kind: "daisy", n: 6 },
-      { at: pathSide(0.8, 1.6), kind: "gold", n: 5 },
-      { at: [-4.2, 3.6], kind: "daisy", n: 7 },   // by the big left anchor
-      { at: [5.4, 3.0], kind: "gold", n: 5 },     // by the big right anchor
-      { at: [-3.2, 2.0], kind: "daisy", n: 6 },
-      { at: [2.6, -2.8], kind: "daisy", n: 6 },
-      { at: [-1.6, -5.6], kind: "gold", n: 5 },
-      { at: [-4.9, -6.0], kind: "daisy", n: 6 },  // cliff-lip rocks
-      { at: [4.8, -5.5], kind: "daisy", n: 5 },
-      { at: [-6.2, -3.4], kind: "pink", n: 4 },
-      { at: [6.6, -0.6], kind: "daisy", n: 6 },
-      { at: [0.8, 2.9], kind: "gold", n: 4 },     // right where the path crests
-      { at: [-2.1, 5.4], kind: "pink", n: 4 }
+      { at: pathSide(0.25, 1.4), kind: "daisy", n: 10 },
+      { at: pathSide(0.5, -1.5), kind: "daisy", n: 9 },
+      { at: pathSide(0.8, 1.6), kind: "gold", n: 8 },
+      { at: pathSide(0.14, -1.3), kind: "daisy", n: 8 },
+      { at: [-4.2, 3.6], kind: "daisy", n: 10 },  // by the big left anchor
+      { at: [5.4, 3.0], kind: "gold", n: 8 },     // by the big right anchor
+      { at: [-3.2, 2.0], kind: "daisy", n: 9 },
+      { at: [2.6, -2.8], kind: "daisy", n: 9 },
+      { at: [-1.6, -5.6], kind: "gold", n: 8 },
+      { at: [-4.9, -6.0], kind: "daisy", n: 9 },  // cliff-lip rocks
+      { at: [4.8, -5.5], kind: "daisy", n: 8 },
+      { at: [-6.2, -3.4], kind: "pink", n: 5 },
+      { at: [6.6, -0.6], kind: "daisy", n: 9 },
+      { at: [0.8, 2.9], kind: "gold", n: 7 },     // right where the path crests
+      { at: [-2.1, 5.4], kind: "pink", n: 5 },
+      { at: [1.5, -6.3], kind: "daisy", n: 8 },   // crest lip, breaks horizon
+      { at: [-6.8, 1.4], kind: "gold", n: 7 },
+      { at: [3.6, 4.6], kind: "daisy", n: 8 }
     ];
     flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
       for (let i = 0; i < n; i++) {
         const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
-        const rad = 0.08 + Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.42;
+        const rad = 0.08 + Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.6;
         const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
         if (pathMask(x, z) > 0.3 || terrainDrop(x, z) > 0.08 || Math.hypot(x, z) < 0.8 || insideRock(x, z)) continue;
         const y = groundHeight(x, z);
