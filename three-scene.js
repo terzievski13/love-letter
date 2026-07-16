@@ -71,6 +71,7 @@ const ThreeScene = (() => {
     buildGround();
     buildMountains();
     buildSun();
+    buildScatter();
     buildMailbox();
     buildLights();
 
@@ -533,6 +534,140 @@ const ThreeScene = (() => {
       }
     ];
     ranges.forEach(makeRange);
+  }
+
+  function buildScatter() {
+    /* Foreground dressing: stepping stones on the path, boulders at the
+       cliff lip, wildflowers, chunky grass tufts. One InstancedMesh per
+       species = one draw call each. Everything is placed via groundHeight
+       so nothing floats, kept inside x,z ∈ ±10 (the sun's shadow box),
+       and positioned with hash2 so the layout is stable across reloads. */
+    const dummy = new THREE.Object3D();
+    function place(mesh, list) {
+      list.forEach((p, i) => {
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.rotation.set(p.rx || 0, p.ry || 0, p.rz || 0);
+        dummy.scale.set(p.sx || 1, p.sy || 1, p.sz || 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+        if (p.color) mesh.setColorAt(i, p.color);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      scene.add(mesh);
+      return mesh;
+    }
+    const bez = (t) => {
+      const u = 1 - t;
+      return [
+        u * u * PATH_P0[0] + 2 * u * t * PATH_P1[0] + t * t * PATH_P2[0],
+        u * u * PATH_P0[1] + 2 * u * t * PATH_P1[1] + t * t * PATH_P2[1]
+      ];
+    };
+
+    // --- stepping stones along the path curve ---
+    const stones = [];
+    for (let i = 0; i < 9; i++) {
+      const t = 0.08 + i * 0.105;
+      const [bx, bz] = bez(t);
+      const [ax, az] = bez(t + 0.02);
+      // small sideways jitter, perpendicular to the path direction
+      const dx = ax - bx, dz = az - bz;
+      const dl = Math.hypot(dx, dz) || 1;
+      const side = (hash2(3.3, i) - 0.5) * 0.26;
+      const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
+      const s = 0.15 + hash2(7.7, i) * 0.07;
+      stones.push({
+        x, z, y: groundHeight(x, z) + 0.006,
+        sx: s, sy: 0.12, sz: s * (0.85 + hash2(9.1, i) * 0.3),
+        ry: hash2(5.5, i) * Math.PI * 2,
+        color: new THREE.Color().setHSL(0.075, 0.16, 0.52 + hash2(2.9, i) * 0.14)
+      });
+    }
+    const stoneMesh = place(new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(1, 1.15, 0.3, 7),
+      new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
+    stoneMesh.castShadow = true;
+    stoneMesh.receiveShadow = true;
+
+    // --- boulders: cliff lip + path edges + a few loose ones ---
+    // Sphere (indexed → smooth normals) with position-hashed jitter baked in:
+    // rounded soft boulders, not faceted golf balls.
+    const rockGeo = new THREE.SphereGeometry(1, 9, 7);
+    const rp = rockGeo.attributes.position;
+    for (let i = 0; i < rp.count; i++) {
+      const px = rp.getX(i), py = rp.getY(i), pz = rp.getZ(i);
+      const j = 1 + (hash2(px * 13.7 + py * 3.1, pz * 7.9) - 0.5) * 0.22;
+      rp.setXYZ(i, px * j, py * j * 0.78, pz * j); // squashed a bit too
+    }
+    rockGeo.computeVertexNormals();
+    const rockSpots = [
+      [-6.8, -7.6, 0.46], [-3.9, -8.3, 0.34], [1.8, -8.0, 0.5], [5.6, -7.2, 0.3],
+      [8.3, -6.0, 0.4], [1.9, 4.6, 0.16], [3.3, 2.0, 0.2], [-0.9, 1.7, 0.14],
+      [-4.6, 2.8, 0.34], [-6.5, -2.2, 0.26], [5.8, 0.6, 0.3], [7.4, 3.4, 0.22],
+      [-7.8, 4.9, 0.3], [-2.2, 6.8, 0.2]
+    ];
+    const rocks = rockSpots.map(([x, z, s], i) => ({
+      x, z, y: groundHeight(x, z) + s * 0.42,
+      sx: s, sy: s * 0.8, sz: s * (0.85 + hash2(4.4, i) * 0.3),
+      ry: hash2(6.6, i) * Math.PI * 2, rz: (hash2(8.2, i) - 0.5) * 0.2,
+      color: new THREE.Color().setHSL(0.06, 0.10 + hash2(1.9, i) * 0.08, 0.40 + hash2(3.7, i) * 0.14)
+    }));
+    const rockMesh = place(new THREE.InstancedMesh(
+      rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), rocks.length), rocks);
+    rockMesh.castShadow = true;
+    rockMesh.receiveShadow = true;
+
+    // --- wildflowers: chunky stems + faceted heads (nothing thin/planar) ---
+    const patches = [[1.8, 3.6], [-2.4, 3.0], [-4.2, -1.6], [3.8, -3.0]];
+    const petalColors = [0xfff1d6, 0xffd97a, 0xff9a62, 0xf7b8c4];
+    const stems = [], heads = [];
+    patches.forEach(([cx, cz], pi) => {
+      for (let i = 0; i < 13; i++) {
+        const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
+        const rad = Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.85;
+        const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
+        if (pathMask(x, z) > 0.3) continue; // keep flowers off the dirt
+        const y = groundHeight(x, z);
+        const s = 0.8 + hash2(pi * 2.2, i * 9.4) * 0.6;
+        const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.25;
+        stems.push({ x, z, y, sx: 1, sy: s, sz: 1, rz: lean });
+        heads.push({
+          x: x + lean * 0.1, z, y: y + 0.1 * s, sx: 1, sy: 1, sz: 1,
+          color: new THREE.Color(petalColors[(pi + i) % petalColors.length])
+        });
+      }
+    });
+    const stemGeo = new THREE.CylinderGeometry(0.01, 0.016, 0.1, 5);
+    stemGeo.translate(0, 0.05, 0);
+    place(new THREE.InstancedMesh(
+      stemGeo, new THREE.MeshLambertMaterial({ color: 0x4a6b1e }), stems.length), stems);
+    place(new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(0.035, 0),
+      new THREE.MeshLambertMaterial({ color: 0xffffff }), heads.length), heads);
+
+    // --- grass tufts: squat solid cones, NOT the banned thin blades ---
+    const tufts = [];
+    for (let i = 0; i < 46; i++) {
+      const x = (hash2(12.7, i * 3.3) - 0.5) * 17;
+      const z = (hash2(21.9, i * 7.1) - 0.5) * 15 + 1;
+      if (Math.hypot(x, z) < 0.6) continue;        // not under the mailbox
+      if (pathMask(x, z) > 0.25) continue;          // not on the path
+      if (terrainDrop(x, z) > 0.05) continue;       // not over the cliff edge
+      tufts.push({
+        x, z, y: groundHeight(x, z),
+        sx: 0.8 + hash2(31.1, i) * 0.7, sy: 0.55 + hash2(17.3, i) * 0.5, sz: 0.8 + hash2(13.9, i) * 0.7,
+        ry: hash2(19.7, i) * Math.PI,
+        // stay close to the ground's own greens — darker cones read as
+        // tiny pine trees instead of grass
+        color: new THREE.Color(hash2(23.3, i) > 0.5 ? 0x84a01e : 0x97b02c)
+      });
+    }
+    // squat rounded clump, clearly grass-bush and not a mini conifer
+    const tuftGeo = new THREE.ConeGeometry(0.105, 0.085, 6);
+    tuftGeo.translate(0, 0.042, 0);
+    place(new THREE.InstancedMesh(
+      tuftGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), tufts.length), tufts);
   }
 
   // Warm saddle-brown wood texture for the mailbox interior.
