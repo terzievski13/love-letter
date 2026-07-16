@@ -139,25 +139,50 @@ const ThreeScene = (() => {
       { x:  28, y: 38, z: -36, w: 26, h: 8,  color: 0xffeee0, opacity: 0.58 },
       { x:  -2, y: 36, z: -23, w: 32, h: 10, color: 0xffe0d0, opacity: 0.50 },
     ];
-    cloudConfigs.forEach(({ x, y, z, w, h, color, opacity }) => {
+    const cloudSprites = [];
+    cloudConfigs.forEach(({ x, y, z, w, h, color, opacity }, i) => {
       const m = new THREE.SpriteMaterial({ map: cloudTex, color, transparent: true, opacity, depthWrite: false });
       const s = new THREE.Sprite(m);
       s.position.set(x, y, z);
       s.scale.set(w, h, 1);
+      s.userData.baseX = x;
+      s.userData.phase = i * 1.7;
       scene.add(s);
+      cloudSprites.push(s);
+    });
+    // barely-there drift — a few units over minutes, enough to feel alive
+    tickers.push((t) => {
+      for (const s of cloudSprites) {
+        s.position.x = s.userData.baseX + Math.sin(t * 0.03 + s.userData.phase) * 2.2;
+      }
     });
   }
 
   function makeCloudTexture() {
+    // A few overlapping soft puffs with a gently faded underside — reads as
+    // a cumulus tuft instead of one round blob.
     const c = document.createElement("canvas");
     c.width = c.height = 256;
     const ctx = c.getContext("2d");
-    const g = ctx.createRadialGradient(128, 128, 20, 128, 128, 120);
-    g.addColorStop(0, "rgba(255,255,255,1)");
-    g.addColorStop(0.5, "rgba(255,255,255,0.7)");
-    g.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(128, 128, 110, 0, Math.PI * 2); ctx.fill();
+    const puffs = [
+      [66, 148, 44], [108, 118, 56], [156, 124, 52], [198, 146, 40], [128, 156, 54]
+    ];
+    puffs.forEach(([x, y, r]) => {
+      const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
+      g.addColorStop(0, "rgba(255,255,255,0.95)");
+      g.addColorStop(0.6, "rgba(255,255,255,0.55)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    });
+    // soft flat-ish underside
+    ctx.globalCompositeOperation = "destination-out";
+    const cut = ctx.createLinearGradient(0, 168, 0, 214);
+    cut.addColorStop(0, "rgba(0,0,0,0)");
+    cut.addColorStop(1, "rgba(0,0,0,0.9)");
+    ctx.fillStyle = cut;
+    ctx.fillRect(0, 168, 256, 88);
+    ctx.globalCompositeOperation = "source-over";
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
@@ -1068,11 +1093,14 @@ const ThreeScene = (() => {
   }
 
   function buildLights() {
-    const ambient = new THREE.HemisphereLight(0xfde4c8, 0x6a4a3a, 0.55);
+    // ground bounce leans toward the new grass tone instead of bare dirt
+    const ambient = new THREE.HemisphereLight(0xfde4c8, 0x5c5432, 0.55);
     scene.add(ambient);
 
+    // key stays roughly where the mailbox was tuned for — only nudged a
+    // touch toward the back for a hint of the sunset backlight
     const sun = new THREE.DirectionalLight(0xffd6a0, 1.6);
-    sun.position.set(6, 3, 0);
+    sun.position.set(5, 3, -2);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -10;
@@ -1084,8 +1112,9 @@ const ThreeScene = (() => {
     sun.shadow.bias = -0.0005;
     scene.add(sun);
 
-    // warm rim light
-    const rim = new THREE.DirectionalLight(0xff9a6a, 0.4);
+    // warm rim light — faked sun-side rim, slightly stronger now that the
+    // visible sun sits back-left
+    const rim = new THREE.DirectionalLight(0xffa072, 0.5);
     rim.position.set(-5, 2, 4);
     scene.add(rim);
   }
