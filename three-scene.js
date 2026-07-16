@@ -72,7 +72,6 @@ const ThreeScene = (() => {
     buildMountains();
     buildSun();
     buildScatter();
-    buildPines();
     buildLighthouse();
     buildSailboat();
     buildMailbox();
@@ -210,8 +209,10 @@ const ThreeScene = (() => {
       new THREE.PlaneGeometry(600, 400),
       new THREE.MeshBasicMaterial({ map: tex, fog: true })
     );
+    // y=-0.22: low enough that the knoll's dipped skirt (clamped at -0.14
+    // in groundHeight) never floods
     water.rotation.x = -Math.PI / 2;
-    water.position.set(0, -0.09, -100);
+    water.position.set(0, -0.22, -100);
     scene.add(water);
 
     // Tiling ripple-dash tile; dashes drawn three times (x, x±128) so the
@@ -239,8 +240,8 @@ const ThreeScene = (() => {
     // Two overlays at different tilings scrolling opposite ways — layered
     // shimmer without a shader.
     [
-      { seed: 5.7, count: 26, rep: [10, 7], y: -0.03, opacity: 0.28, speed: 0.010 },
-      { seed: 9.2, count: 18, rep: [6, 4],  y: -0.05, opacity: 0.20, speed: -0.007 }
+      { seed: 5.7, count: 26, rep: [10, 7], y: -0.16, opacity: 0.28, speed: 0.010 },
+      { seed: 9.2, count: 18, rep: [6, 4],  y: -0.18, opacity: 0.20, speed: -0.007 }
     ].forEach((o) => {
       const t = makeRippleTexture(o.seed, o.count);
       t.repeat.set(o.rep[0], o.rep[1]);
@@ -281,7 +282,7 @@ const ThreeScene = (() => {
     const streak = new THREE.Mesh(sgeo, smat);
     // long axis aimed from the sun (−75, −130) toward the camera side
     streak.rotation.y = 0.52;
-    streak.position.set(-46.5, -0.02, -80);
+    streak.position.set(-46.5, -0.14, -80);
     scene.add(streak);
     tickers.push((time) => { smat.opacity = 0.78 + 0.22 * Math.sin(time * 0.6); });
   }
@@ -366,12 +367,20 @@ const ThreeScene = (() => {
   }
 
   function groundHeight(x, z) {
-    // gentle rolling grass — rises only (0..0.55): centered noise would dip
-    // low spots under the water plane and read as random inland ponds
-    let h = fbm2(x / 8 + 3.7, z / 8 + 9.1, 2) * 0.55;
+    const r = Math.hypot(x, z);
+    // gentle rolling grass — rises only: centered noise would dip low spots
+    // under the water plane and read as random inland ponds
+    let h = fbm2(x / 8 + 3.7, z / 8 + 9.1, 2) * 0.35;
     // dead-flat plateau under the mailbox — base plate, shadow and camera
     // look-at all assume y=0 there; blends back to rolling by r=5
-    h *= sstep(2.8, 5, Math.hypot(x, z));
+    h *= sstep(2.8, 5, r);
+    // knoll: the land falls away from the plateau in every direction, so
+    // the mailbox crests a small hill and the path climbs to it (concept
+    // board: "the hill elevates the mailbox"). The plateau itself cannot
+    // move, so the surroundings dip instead — clamped above the sea, which
+    // sits at y=-0.22 for exactly this reason.
+    h -= 0.5 * sstep(2.8, 9, r);
+    h = Math.max(h, -0.14);
     // headland drop into the sea, with a little cliff-face roughness in the band
     const drop = terrainDrop(x, z);
     const cliffNoise = (fbm2(x / 3 + 77.7, z / 3 + 51.3, 2) - 0.5) * 0.5 * drop * (1 - drop) * 4;
@@ -392,7 +401,11 @@ const ThreeScene = (() => {
       const d2 = dx * dx + dz * dz;
       if (d2 < min2) min2 = d2;
     }
-    return 1 - sstep(0.32, 0.46, Math.sqrt(min2));
+    // wide like the concept board: broadens toward the viewer, organic
+    // noise-wobbled edge instead of a ruler line
+    const w = 0.5 + 0.35 * sstep(0.5, 7, z);
+    const wob = (fbm2(x * 1.1 + 5.5, z * 1.1 + 2.2, 2) - 0.5) * 0.22;
+    return 1 - sstep(w, w + 0.3, Math.sqrt(min2) + wob);
   }
 
   // Ground colors live in a painted texture (not vertex colors): the mesh's
@@ -433,11 +446,18 @@ const ThreeScene = (() => {
         }
 
         // dirt path — only bother inside its bounding box
-        if (x > -1 && x < 4.6 && z > -0.6 && z < 8.4) {
+        if (x > -1.6 && x < 5.2 && z > -0.6 && z < 8.4) {
           const pm = pathMask(x, z);
           if (pm > 0) {
             dirt.copy(dirtA).lerp(dirtB, fbm2(x / 2.4 + 31.1, z / 2.4 + 5.5, 2));
             col.lerp(dirt, pm);
+            // pebble speckle (the board's gravel "PATH DETAIL") — chunky
+            // and high-contrast, since texture filtering softens it a lot
+            if (pm > 0.4) {
+              const peb = valueNoise2(x * 3.5 + 61.7, z * 3.5 + 23.3);
+              if (peb > 0.74) col.multiplyScalar(0.74);
+              else if (peb < 0.14) col.multiplyScalar(1.22);
+            }
           }
         }
 
@@ -594,64 +614,53 @@ const ThreeScene = (() => {
       ];
     };
 
-    /* Composition rules (feedback: "scattered randomly without order"):
-       rocks live in nestled family groups (one large + smaller ones
-       leaning on it), flowers grow in single-color clusters at path
-       edges and rock bases, grass mounds run in rhythmic drifts along
-       the cliff lip and the path. Nothing is uniformly sprinkled. */
-
-    // --- stepping stones: flat rounded pads, sunk into the dirt ---
-    const stones = [];
-    for (let i = 0; i < 7; i++) {
-      const t = 0.10 + i * 0.13;
+    /* Layout copied from the user's foreground concept board:
+       gray rocks in clusters (big anchors at the frame corners, escorts
+       flanking the path), spiky grass clumps everywhere — taller near
+       rocks and edges, shorter near the path — and flower drifts of
+       white daisies, yellow buttercups and pink spikes on the knoll's
+       flanks. Nothing evenly sprinkled; everything clustered. */
+    const pathSide = (t, off) => {
       const [bx, bz] = bez(t);
       const [ax, az] = bez(t + 0.02);
       const dx = ax - bx, dz = az - bz;
       const dl = Math.hypot(dx, dz) || 1;
-      const side = (hash2(3.3, i) - 0.5) * 0.16;
-      const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
-      const s = 0.17 + hash2(7.7, i) * 0.05;
-      stones.push({
-        x, z, y: groundHeight(x, z) + s * 0.05,
-        sx: s, sy: s * 0.26, sz: s * (0.88 + hash2(9.1, i) * 0.24),
-        ry: hash2(5.5, i) * Math.PI * 2,
-        // sandy tones close to the dirt, so pads read as part of the path
-        color: new THREE.Color().setHSL(0.09, 0.13, 0.56 + hash2(2.9, i) * 0.08)
-      });
-    }
+      return [bx + (-dz / dl) * off, bz + (dx / dl) * off];
+    };
 
-    // --- boulders: smooth low-frequency lumps, buried deep ---
-    const rockGeo = new THREE.SphereGeometry(1, 12, 9);
+    // ---------- rocks: neutral gray, clustered, varied sizes ----------
+    const rockGeo = new THREE.SphereGeometry(1, 10, 8);
     const rp = rockGeo.attributes.position;
     for (let i = 0; i < rp.count; i++) {
       const px = rp.getX(i), py = rp.getY(i), pz = rp.getZ(i);
-      // fbm over direction = large soft lumps, not per-vertex noise spikes
-      const j = 1 + (fbm2(px * 1.3 + 9.2, (py + pz) * 1.3 + 4.4, 2) - 0.5) * 0.3;
-      rp.setXYZ(i, px * j, py * j * 0.72, pz * j);
+      // chunkier lumps than before — the board's rocks are angular-soft
+      const j = 1 + (fbm2(px * 1.6 + 9.2, (py + pz) * 1.6 + 4.4, 2) - 0.5) * 0.42;
+      rp.setXYZ(i, px * j, py * j * 0.7, pz * j);
     }
     rockGeo.computeVertexNormals();
-    // pads for the path share the boulder geometry (squashed via scale)
-    const stoneMesh = place(new THREE.InstancedMesh(
-      rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
-    stoneMesh.receiveShadow = true;
-
-    // family groups: [groupX, groupZ, [size, offsetX, offsetZ]...]
+    // [groupX, groupZ, [size, offsetX, offsetZ]...]
     const rockGroups = [
-      [-5.6, -6.9, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],
+      [-5.0, 4.6, [0.72, 0, 0], [0.34, 0.85, 0.5], [0.20, -0.66, 0.42]],  // big left anchor
+      [6.1, 3.9, [0.58, 0, 0], [0.28, -0.64, 0.3]],                       // big right anchor
+      [1.9, 4.8, [0.28, 0, 0], [0.15, 0.42, 0.22]],                       // path right
+      [-0.7, 3.3, [0.24, 0, 0], [0.13, -0.34, 0.18]],                     // path left
+      [3.3, 1.8, [0.20, 0, 0]],                                           // near the crest
+      [-3.9, 0.8, [0.38, 0, 0], [0.19, 0.5, 0.3]],                        // left flank
+      [-5.6, -6.9, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
       [5.3, -6.3, [0.42, 0, 0], [0.22, -0.42, 0.28]],
-      [-3.8, 2.0, [0.20, 0, 0], [0.12, 0.27, 0.13]],
-      [6.9, 2.4, [0.28, 0, 0], [0.15, 0.36, -0.21]],
-      [3.1, 5.6, [0.15, 0, 0]]
+      [-2.0, -7.2, [0.28, 0, 0]],
+      [7.0, -1.5, [0.34, 0, 0], [0.18, 0.44, -0.2]]
     ];
     const rocks = [];
     rockGroups.forEach(([gx, gz, ...members], gi) => {
       members.forEach(([s, ox, oz], mi) => {
         const x = gx + ox, z = gz + oz;
         rocks.push({
-          x, z, y: groundHeight(x, z) + s * 0.30,
-          sx: s, sy: s * (0.82 + hash2(4.4, gi + mi) * 0.2), sz: s * (0.88 + hash2(5.2, gi * 3 + mi) * 0.22),
+          x, z, y: groundHeight(x, z) + s * 0.26,
+          sx: s, sy: s * (0.78 + hash2(4.4, gi + mi) * 0.2), sz: s * (0.88 + hash2(5.2, gi * 3 + mi) * 0.22),
           ry: hash2(6.6, gi * 7 + mi) * Math.PI * 2,
-          color: new THREE.Color().setHSL(0.07, 0.12, 0.36 + hash2(3.7, gi + mi * 2) * 0.07)
+          // neutral gray, light tops — the board's palette swatch
+          color: new THREE.Color().setHSL(0.10, 0.045, 0.42 + hash2(3.7, gi + mi * 2) * 0.14)
         });
       });
     });
@@ -660,139 +669,154 @@ const ThreeScene = (() => {
     rockMesh.castShadow = true;
     rockMesh.receiveShadow = true;
 
-    // --- wildflowers: tight single-color clusters where they'd grow —
-    //     along the path edges and at the feet of rocks/pines ---
-    const CREAM = 0xfff1d6, CORAL = 0xff9a72, GOLD = 0xffd27a;
-    const pathSide = (t, off) => {
-      const [bx, bz] = bez(t);
-      const [ax, az] = bez(t + 0.02);
-      const dx = ax - bx, dz = az - bz;
-      const dl = Math.hypot(dx, dz) || 1;
-      return [bx + (-dz / dl) * off, bz + (dx / dl) * off];
-    };
-    const clusters = [
-      { at: pathSide(0.30, 0.62), color: CREAM, n: 5 },
-      { at: pathSide(0.68, -0.60), color: CORAL, n: 4 },
-      { at: [-5.1, -6.2], color: GOLD, n: 5 },   // by the big cliff rocks
-      { at: [5.0, -5.6], color: CREAM, n: 4 },   // by the right rocks
-      { at: [-3.0, -1.2], color: CORAL, n: 4 }   // at the small pine's feet
-    ];
-    const stems = [], heads = [];
-    clusters.forEach(({ at: [cx, cz], color, n }, pi) => {
-      for (let i = 0; i < n; i++) {
-        const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
-        const rad = 0.06 + Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.24;
-        const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
-        if (pathMask(x, z) > 0.3 || terrainDrop(x, z) > 0.08) continue;
-        const y = groundHeight(x, z);
-        const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.5;
-        const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
-        stems.push({ x, z, y, sx: 1, sy: s, sz: 1, rz: lean });
-        heads.push({
-          x: x + lean * 0.1, z, y: y + 0.095 * s,
-          sx: s, sy: s * 0.85, sz: s,
-          color: new THREE.Color(color)
+    // ---------- grass clumps: fans of SOLID thin cones ----------
+    // The board shows spiky tufts. Blades here are narrow 3D cones — real
+    // solid geometry, not the banned thin planes. One instance per blade,
+    // one InstancedMesh total.
+    const blades = [];
+    const bladeCol = new THREE.Color();
+    // nothing may grow inside a boulder's footprint
+    const insideRock = (x, z) =>
+      rocks.some((r) => Math.hypot(x - r.x, z - r.z) < r.sx * 1.15);
+    function addClump(x, z, s, k) {
+      if (Math.hypot(x, z) < 0.75) return;
+      if (pathMask(x, z) > 0.25 || terrainDrop(x, z) > 0.06) return;
+      if (insideRock(x, z)) return;
+      const y = groundHeight(x, z);
+      const n = 6 + Math.floor(hash2(61.3, k) * 4);
+      for (let b = 0; b < n; b++) {
+        const a = (b / n) * Math.PI * 2 + hash2(k * 1.7, b) * 1.4;
+        const tilt = 0.12 + hash2(k * 2.3, b * 3.1) * 0.38;
+        const h = s * (0.13 + hash2(k * 3.9, b * 1.3) * 0.17);
+        const dry = hash2(k * 7.1, b * 2.9) > 0.9; // occasional dry-yellow blade
+        blades.push({
+          x: x + Math.cos(a) * 0.025, z: z + Math.sin(a) * 0.025, y,
+          sx: 0.016 + hash2(k, b) * 0.008, sy: h, sz: 0.016,
+          // small-angle lean outward from the clump centre
+          rx: tilt * Math.sin(a), rz: -tilt * Math.cos(a),
+          color: dry
+            ? bladeCol.setHSL(0.14, 0.5, 0.48 + hash2(k * 9.7, b) * 0.1).clone()
+            : bladeCol.setHSL(0.21, 0.5, 0.30 + hash2(k * 9.7, b) * 0.13).clone()
         });
       }
+    }
+    let ck = 0;
+    // escorts down both sides of the path — short near the dirt
+    for (let i = 0; i < 11; i++) {
+      const t = 0.1 + i * 0.082;
+      [1, -1].forEach((side) => {
+        const [x, z] = pathSide(t, side * (0.95 + hash2(71.3, ck) * 0.35));
+        addClump(x, z, 0.75, ck++);
+      });
+    }
+    // tall companions around every rock group
+    rockGroups.forEach(([gx, gz, [s0]]) => {
+      for (let i = 0; i < 3; i++) {
+        const a = hash2(gx * 3.1, gz * 5.7 + i) * Math.PI * 2;
+        const r = s0 + 0.28 + hash2(gz * 2.9, i) * 0.25;
+        addClump(gx + Math.cos(a) * r, gz + Math.sin(a) * r, 1.3, ck++);
+      }
     });
-    const stemGeo = new THREE.CylinderGeometry(0.01, 0.015, 0.1, 6);
+    // tall drift along the cliff lip (silhouettes against the water)
+    for (let i = 0; i < 13; i++) {
+      const x = -7.6 + i * 1.35 + (hash2(41.3, i) - 0.5) * 0.6;
+      const z = -7.2 + Math.sin(i * 0.55) * 0.5 + (hash2(43.7, i) - 0.5) * 0.4;
+      addClump(x, z, 1.25, ck++);
+    }
+    // clusters over the knoll flanks — lush, like the board
+    for (let i = 0; i < 13; i++) {
+      const a = hash2(53.9, i * 3.7) * Math.PI * 2;
+      const r = 3.2 + hash2(57.1, i * 1.9) * 2.2;
+      const cx = Math.cos(a) * r, cz = Math.sin(a) * r;
+      for (let j = 0; j < 3; j++) {
+        addClump(cx + (hash2(i, j * 7.7) - 0.5) * 0.9, cz + (hash2(j, i * 5.3) - 0.5) * 0.9, 1.0, ck++);
+      }
+    }
+    // paired fillers further out
+    for (let i = 0; i < 22; i++) {
+      const a = hash2(63.7, i * 2.3) * Math.PI * 2;
+      const r = 4.5 + hash2(67.9, i * 4.1) * 3.8;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      addClump(x, z, 0.95, ck++);
+      addClump(x + 0.4, z + 0.3, 0.65, ck++);
+    }
+    // (the blade InstancedMesh is created AFTER the flower section — the
+    // pink flower spikes below reuse the blade list)
+
+    // ---------- flowers: daisy drifts + buttercups + pink spikes ----------
+    const stems = [], heads = [], centers = [];
+    // cluster centers on the knoll flanks (heaviest beside the path, like
+    // the board), near the big rocks, along the cliff lip inner side
+    const flowerClusters = [
+      { at: pathSide(0.25, 1.4), kind: "daisy", n: 7 },
+      { at: pathSide(0.5, -1.5), kind: "daisy", n: 6 },
+      { at: pathSide(0.8, 1.6), kind: "gold", n: 5 },
+      { at: [-4.2, 3.6], kind: "daisy", n: 7 },   // by the big left anchor
+      { at: [5.4, 3.0], kind: "gold", n: 5 },     // by the big right anchor
+      { at: [-3.2, 2.0], kind: "daisy", n: 6 },
+      { at: [2.6, -2.8], kind: "daisy", n: 6 },
+      { at: [-1.6, -5.6], kind: "gold", n: 5 },
+      { at: [-4.9, -6.0], kind: "daisy", n: 6 },  // cliff-lip rocks
+      { at: [4.8, -5.5], kind: "daisy", n: 5 },
+      { at: [-6.2, -3.4], kind: "pink", n: 4 },
+      { at: [6.6, -0.6], kind: "daisy", n: 6 },
+      { at: [0.8, 2.9], kind: "gold", n: 4 },     // right where the path crests
+      { at: [-2.1, 5.4], kind: "pink", n: 4 }
+    ];
+    flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
+      for (let i = 0; i < n; i++) {
+        const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
+        const rad = 0.08 + Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.42;
+        const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
+        if (pathMask(x, z) > 0.3 || terrainDrop(x, z) > 0.08 || Math.hypot(x, z) < 0.8 || insideRock(x, z)) continue;
+        const y = groundHeight(x, z);
+        const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.55;
+        const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
+        if (kind === "pink") {
+          // pink flower spike — reuses the blade cone, thicker and taller
+          blades.push({
+            x, z, y, sx: 0.024, sy: 0.2 * s, sz: 0.024,
+            rx: lean, rz: -lean,
+            color: new THREE.Color(0xc8699c)
+          });
+          continue;
+        }
+        stems.push({ x, z, y, sx: 1, sy: s, sz: 1, rz: lean });
+        if (kind === "daisy") {
+          heads.push({
+            x: x + lean * 0.1, z, y: y + 0.098 * s,
+            sx: s, sy: s * 0.38, sz: s,            // flat white petal disc
+            color: new THREE.Color(0xfff6ea)
+          });
+          centers.push({
+            x: x + lean * 0.1, z, y: y + 0.104 * s,
+            sx: s * 0.42, sy: s * 0.34, sz: s * 0.42,
+            color: new THREE.Color(0xf2b135)
+          });
+        } else { // gold buttercup — same head mesh, rounder and yellow
+          heads.push({
+            x: x + lean * 0.1, z, y: y + 0.096 * s,
+            sx: s * 0.62, sy: s * 0.55, sz: s * 0.62,
+            color: new THREE.Color(0xffd23e)
+          });
+        }
+      }
+    });
+    const stemGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.1, 5);
     stemGeo.translate(0, 0.05, 0);
     place(new THREE.InstancedMesh(
-      stemGeo, new THREE.MeshLambertMaterial({ color: 0x55702a }), stems.length), stems);
+      stemGeo, new THREE.MeshLambertMaterial({ color: 0x557024 }), stems.length), stems);
+    const headGeo = new THREE.SphereGeometry(0.034, 8, 6);
     place(new THREE.InstancedMesh(
-      new THREE.SphereGeometry(0.034, 8, 6),
-      new THREE.MeshLambertMaterial({ color: 0xffffff }), heads.length), heads);
-
-    // --- grass mounds: soft rounded clumps in deliberate drifts, still
-    //     solid geometry (thin blades stay banned) ---
-    const tufts = [];
-    const addTuft = (x, z, s, k) => {
-      if (Math.hypot(x, z) < 0.7) return;
-      if (pathMask(x, z) > 0.2 || terrainDrop(x, z) > 0.05) return;
-      tufts.push({
-        x, z, y: groundHeight(x, z) + 0.005,
-        sx: s * (0.9 + hash2(13.9, k) * 0.25), sy: s * 0.55, sz: s,
-        ry: hash2(19.7, k) * Math.PI,
-        // slightly darker than the lawn so mounds read as grass shadowing,
-        // not bright lime pebbles
-        color: new THREE.Color(hash2(23.3, k) > 0.5 ? 0x78911a : 0x86a021)
-      });
-    };
-    // a drift hugging the cliff lip — sizes pulse big/small along the run
-    for (let k = 0; k < 12; k++) {
-      const x = -7.5 + k * 1.45 + (hash2(41.3, k) - 0.5) * 0.5;
-      const z = -7.3 + Math.sin(k * 0.55) * 0.55 + (hash2(43.7, k) - 0.5) * 0.4;
-      addTuft(x, z, (0.95 + 0.35 * Math.sin(k * 1.9)) * 1.1, k);
-    }
-    // short runs escorting the path, alternating sides, shrinking inward
-    for (let k = 0; k < 6; k++) {
-      const t = 0.16 + k * 0.14;
-      const [x, z] = pathSide(t, (k % 2 ? -1 : 1) * (0.5 + hash2(47.1, k) * 0.2));
-      addTuft(x, z, 1.1 - k * 0.09, 20 + k);
-    }
-    // small companions at the rock groups and pine feet
-    [[-4.9, -6.5], [5.7, -5.9], [-4.0, 1.6], [7.2, 2.7], [-3.3, -1.9]].forEach(([x, z], k) => {
-      addTuft(x, z, 0.9, 40 + k);
-      addTuft(x + 0.3, z + 0.22, 0.6, 50 + k);
-    });
-    // mound = the same smooth boulder geometry squashed low
+      headGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), heads.length), heads);
     place(new THREE.InstancedMesh(
-      rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), tufts.length),
-      tufts.map((p) => ({ ...p, sx: p.sx * 0.16, sy: p.sy * 0.16, sz: p.sz * 0.16 })));
-  }
+      headGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), centers.length), centers);
 
-  function buildPines() {
-    /* Two pines frame the left of the frame (from the outside camera,
-       "left" = world −x). One continuous lathe-turned silhouette with
-       soft drooping tiers instead of stacked hard cones — plus a subtle
-       dark-to-light vertical gradient, so it reads storybook-soft like
-       the mountains rather than low-poly-game. Both sit inside the sun's
-       ±10 shadow box so they cast real shadows. */
-    function pine(scale, tiltZ, tiltX) {
-      const g = new THREE.Group();
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.09, 0.5, 8),
-        new THREE.MeshLambertMaterial({ color: 0x4a3020 })
-      );
-      trunk.position.y = 0.25;
-      trunk.castShadow = true;
-      g.add(trunk);
-
-      // (radius, height) profile: one smooth, slightly concave taper —
-      // a soft storybook cone, no hard tier shelves
-      const prof = [
-        [0.03, 0.28], [0.50, 0.38], [0.44, 0.66], [0.35, 0.96],
-        [0.26, 1.26], [0.17, 1.54], [0.08, 1.80], [0.005, 2.0]
-      ];
-      const geo = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 14);
-      // vertical gradient: shaded base rising to sunlit tip
-      const pos = geo.attributes.position;
-      const colors = new Float32Array(pos.count * 3);
-      const lo = new THREE.Color(0x2a3f2c), hi = new THREE.Color(0x4d6b46);
-      const c = new THREE.Color();
-      for (let i = 0; i < pos.count; i++) {
-        c.copy(lo).lerp(hi, sstep(0.3, 1.9, pos.getY(i)));
-        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
-      }
-      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-      const foliage = new THREE.Mesh(
-        geo,
-        new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
-      );
-      foliage.castShadow = true;
-      g.add(foliage);
-
-      g.scale.setScalar(scale);
-      g.rotation.z = tiltZ;
-      g.rotation.x = tiltX;
-      return g;
-    }
-    const big = pine(1.5, 0.04, -0.02);
-    big.position.set(-4.2, groundHeight(-4.2, 1.2), 1.2);
-    scene.add(big);
-    const small = pine(1.05, -0.05, 0.03);
-    small.position.set(-3.6, groundHeight(-3.6, -1.6), -1.6);
-    scene.add(small);
+    const bladeGeo = new THREE.ConeGeometry(1, 1, 4);
+    bladeGeo.translate(0, 0.5, 0); // base at origin so lean pivots at the ground
+    const bladeMesh = place(new THREE.InstancedMesh(
+      bladeGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), blades.length), blades);
+    bladeMesh.castShadow = false; // ~900 tiny casters = shadow-map noise
   }
 
   function buildLighthouse() {
@@ -918,7 +942,7 @@ const ThreeScene = (() => {
       new THREE.MeshBasicMaterial({ color: 0xfff2e0, side: THREE.DoubleSide, fog: true })
     );
     boat.add(sail);
-    boat.position.set(-30, -0.02, -55);
+    boat.position.set(-30, -0.16, -55);
     boat.rotation.y = Math.PI * 0.08;
     scene.add(boat);
     tickers.push((t) => {
@@ -926,7 +950,7 @@ const ThreeScene = (() => {
       // wrap-around teleport is never visible
       boat.position.x = -45 + ((t * 0.3125) % 75);
       boat.rotation.z = Math.sin(t * 0.8) * 0.03;
-      boat.position.y = -0.02 + Math.sin(t * 0.55) * 0.015;
+      boat.position.y = -0.16 + Math.sin(t * 0.55) * 0.015;
     });
   }
 

@@ -98,16 +98,21 @@ untouched. What the scene is now:
   via texture offsets + additive fog-free glitter streak + sun disc and
   halo sprites at (−75, −130). All landscape motion runs through the
   `tickers` array → `updateLandscape(t)` (one line in `animate()`).
-- **Foreground**: COMPOSED, not scattered (user rejected random
-  sprinkling as game-y). Rocks sit in nestled family groups, flowers in
-  single-color clusters at path edges / rock bases / pine feet, grass
-  mounds (squashed smooth spheres) run in drifts along the cliff lip and
-  path. Pines are one smooth lathe-turned taper with a vertical color
-  gradient — NOT stacked cones (tried, too game-y) and NOT a tiered
-  zigzag lathe profile (tried, renders as harsh shelves). All
-  shadow-casters sit inside the sun's ±10 shadow box — don't place
-  casters outside it (their shadows silently vanish) and don't widen
-  the box (blurs the mailbox shadow).
+- **Foreground**: copied from the user's concept board ("FOREGROUND
+  CONCEPT — a cozy place for letters"; keep matching it, not taste).
+  Knoll: the land dips ~0.5 away from the y=0 plateau (the plateau
+  itself can never move) so the mailbox crests a hill — this is why the
+  SEA sits at y=−0.22 (dipped lawn clamped at −0.14 must never flood;
+  ripple overlays/streak/boat heights all moved with it). Wide sandy
+  path with pebble speckle, NO stepping stones. Gray rocks in nestled
+  clusters (big anchors at bottom frame corners). Grass = spiky clumps
+  of SOLID thin cones, one instance per blade (planes still banned);
+  taller near rocks/edges, shorter near path; nothing may spawn inside
+  a rock footprint. Flowers = white daisies w/ yellow centers +
+  buttercups + pink spikes, in drifts. NO trees (pines cut on request).
+  All shadow-casters sit inside the sun's ±10 shadow box — don't place
+  casters outside it (shadows silently vanish), don't widen the box
+  (blurs the mailbox shadow), and blades don't cast (shadow-map noise).
 - **Story details**: lighthouse islet + tiny village at (1.5, −52) —
   must stay in FRONT of the foothill ridge strip (z ≥ −67) or it gets
   swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.
