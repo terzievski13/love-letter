@@ -40,6 +40,14 @@ const LETTERS_DATA = /*EDITMODE-BEGIN*/{
       "envelopeColor": "#f4ddc8",
       "wax": "#b85a4a",
       "body": "Love of my life,\n\nThis one doesn't have a date. Save it for a day you need it. A bad commute. A hard meeting. A 3pm when nothing feels right.\n\nWhen you open it, remember: I think you're the most extraordinary person I've ever met. And I get to love you. That's the luckiest thing in my life.\n\nUntil tonight,\nMe"
+    },
+    {
+      "id": 6,
+      "date": "Jul 12, 2026",
+      "title": "The one about summer",
+      "envelopeColor": "#dbbee9",
+      "wax": "#9e6e6e",
+      "body": "My love,\n\nWrite your letter here.\n\nYours,\nMe"
     }
   ],
   "scene": "diorama",
