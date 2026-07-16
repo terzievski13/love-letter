@@ -199,15 +199,158 @@ const ThreeScene = (() => {
     scene.add(water);
   }
 
+  /* ---- Terrain shape: single source of truth ----
+     groundHeight(x,z) is used by the ground mesh AND every scatter/placement
+     function (stones, rocks, flowers, trees), so nothing ever floats. */
+
+  // Deterministic value noise from a sin-hash — no external lib.
+  function hash2(ix, iz) {
+    const s = Math.sin(ix * 127.1 + iz * 311.7) * 43758.5453;
+    return s - Math.floor(s);
+  }
+  function valueNoise2(x, z) {
+    const ix = Math.floor(x), iz = Math.floor(z);
+    const fx = x - ix, fz = z - iz;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sz = fz * fz * (3 - 2 * fz);
+    const a = hash2(ix, iz), b = hash2(ix + 1, iz);
+    const c = hash2(ix, iz + 1), d = hash2(ix + 1, iz + 1);
+    return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz; // 0..1
+  }
+  function fbm2(x, z, octaves) {
+    let v = 0, amp = 0.5, f = 1, total = 0;
+    for (let i = 0; i < (octaves || 3); i++) {
+      v += amp * valueNoise2(x * f, z * f);
+      total += amp;
+      amp *= 0.5; f *= 2;
+    }
+    return v / total; // 0..1
+  }
+  // Clamped hermite step; works with reversed edges (e0 > e1) too.
+  function sstep(e0, e1, x) {
+    const t = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  // 0 on solid land → 1 fully dropped below the water. The land outside a
+  // noise-wobbled ellipse dives under the sea — that wrap of water around
+  // the grass is what makes it a headland.
+  function terrainDrop(x, z) {
+    const wob = (fbm2(x / 14 + 40.2, z / 14 + 17.9, 2) - 0.5) * 0.12;
+    const ex = x / 34;
+    const ez = (z - 23) / 32;
+    const d = Math.sqrt(ex * ex + ez * ez) + wob;
+    const edge = sstep(0.95, 1.28, d);
+    const front = sstep(-9, -18, z); // steeper drop past the old z=-10 shore line
+    return Math.max(edge, front);
+  }
+
+  function groundHeight(x, z) {
+    // gentle rolling grass — rises only (0..0.55): centered noise would dip
+    // low spots under the water plane and read as random inland ponds
+    let h = fbm2(x / 8 + 3.7, z / 8 + 9.1, 2) * 0.55;
+    // dead-flat plateau under the mailbox — base plate, shadow and camera
+    // look-at all assume y=0 there; blends back to rolling by r=5
+    h *= sstep(2.8, 5, Math.hypot(x, z));
+    // headland drop into the sea, with a little cliff-face roughness in the band
+    const drop = terrainDrop(x, z);
+    const cliffNoise = (fbm2(x / 3 + 77.7, z / 3 + 51.3, 2) - 0.5) * 0.5 * drop * (1 - drop) * 4;
+    return h * (1 - drop) + (-2.5) * drop + cliffNoise;
+  }
+
+  // 1 on the dirt path, 0 off it. Distance to a quadratic bezier from the
+  // bottom-right of the outside camera's frame to the mailbox base — sampled,
+  // which is plenty accurate for coloring and stone placement.
+  const PATH_P0 = [2.7, 6.8], PATH_P1 = [2.4, 3.0], PATH_P2 = [0.4, 0.85];
+  function pathMask(x, z) {
+    let min2 = Infinity;
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24, u = 1 - t;
+      const px = u * u * PATH_P0[0] + 2 * u * t * PATH_P1[0] + t * t * PATH_P2[0];
+      const pz = u * u * PATH_P0[1] + 2 * u * t * PATH_P1[1] + t * t * PATH_P2[1];
+      const dx = x - px, dz = z - pz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < min2) min2 = d2;
+    }
+    return 1 - sstep(0.30, 0.55, Math.sqrt(min2));
+  }
+
+  // Ground colors live in a painted texture (not vertex colors): the mesh's
+  // vertices are ~0.8 units apart, far too coarse to draw the half-unit-wide
+  // path — a 1024px canvas gives ~11px per unit instead.
+  function makeGroundTexture() {
+    const W = 1024, H = 1024;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const ctx = c.getContext("2d");
+    const img = ctx.createImageData(W, H);
+    const data = img.data;
+
+    const grassA = new THREE.Color(0x7d9410); // shaded grass
+    const grassB = new THREE.Color(0x9cb625); // sunny grass
+    const dirtA  = new THREE.Color(0x9a744a);
+    const dirtB  = new THREE.Color(0xb08a5a);
+    const rock   = new THREE.Color(0x8a7460);
+    const col = new THREE.Color(), dirt = new THREE.Color(), out = new THREE.Color();
+
+    for (let py = 0; py < H; py++) {
+      // canvas row 0 is v=1 (far edge, z=-15); v=0 is z=55
+      const z = 55 - (1 - (py + 0.5) / H) * 70;
+      for (let px = 0; px < W; px++) {
+        const x = ((px + 0.5) / W) * 90 - 45;
+
+        // mottled grass, never one flat green
+        const mottle = fbm2(x / 5 + 11.3, z / 5 + 7.9, 2);
+        col.copy(grassA).lerp(grassB, mottle);
+
+        // darker grass right at the cliff lip (fake AO), rock further down.
+        // drop stands in for height here — cheaper than groundHeight per pixel.
+        const drop = terrainDrop(x, z);
+        if (drop > 0.02) {
+          col.multiplyScalar(1 - 0.35 * sstep(0.02, 0.22, drop) * (1 - sstep(0.22, 0.45, drop)));
+          col.lerp(rock, sstep(0.18, 0.5, drop));
+        }
+
+        // dirt path — only bother inside its bounding box
+        if (x > -1 && x < 4.6 && z > -0.6 && z < 8.4) {
+          const pm = pathMask(x, z);
+          if (pm > 0) {
+            dirt.copy(dirtA).lerp(dirtB, fbm2(x / 2.4 + 31.1, z / 2.4 + 5.5, 2));
+            col.lerp(dirt, pm);
+          }
+        }
+
+        // THREE.Color stores hex input as LINEAR components; the canvas is
+        // read back as sRGB, so convert or everything double-darkens.
+        out.copy(col).convertLinearToSRGB();
+        const o = (py * W + px) * 4;
+        data[o] = out.r * 255; data[o + 1] = out.g * 255; data[o + 2] = out.b * 255;
+        data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); // path stays crisp at grazing angle
+    return tex;
+  }
+
   function buildGround() {
-    // Box geometry so the front face at z=-10 is the visible shore edge
-    // Top surface at y=0 matches the mailbox base plate exactly
+    // Rolling grassy headland: one displaced plane. Shape from groundHeight,
+    // color from the painted texture above.
+    const geo = new THREE.PlaneGeometry(90, 70, 110, 90);
+    geo.rotateX(-Math.PI / 2);        // lie flat: x/z plane, +y up
+    geo.translate(0, 0, 20);          // spans x −45..45, z −15..55
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      pos.setY(i, groundHeight(pos.getX(i), pos.getZ(i)));
+    }
+    geo.computeVertexNormals();
+
     const ground = new THREE.Mesh(
-      new THREE.BoxGeometry(200, 0.5, 100),
-      new THREE.MeshStandardMaterial({ color: 0x8ca511, roughness: 0.95, metalness: 0 })
+      geo,
+      new THREE.MeshLambertMaterial({ map: makeGroundTexture() })
     );
-    // position: top at y=0, front face (shore edge) at z=-10, back edge at z=90
-    ground.position.set(0, -0.25, 40);
     ground.receiveShadow = true;
     scene.add(ground);
   }
