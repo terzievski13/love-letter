@@ -98,11 +98,16 @@ untouched. What the scene is now:
   via texture offsets + additive fog-free glitter streak + sun disc and
   halo sprites at (−75, −130). All landscape motion runs through the
   `tickers` array → `updateLandscape(t)` (one line in `animate()`).
-- **Foreground**: instanced stepping stones on a bezier path, smooth
-  jittered-sphere boulders, chunky flowers, squat grass-tuft cones; two
-  stacked-cone pines frame the left. All shadow-casters sit inside the
-  sun's ±10 shadow box — don't place casters outside it (their shadows
-  silently vanish) and don't widen the box (blurs the mailbox shadow).
+- **Foreground**: COMPOSED, not scattered (user rejected random
+  sprinkling as game-y). Rocks sit in nestled family groups, flowers in
+  single-color clusters at path edges / rock bases / pine feet, grass
+  mounds (squashed smooth spheres) run in drifts along the cliff lip and
+  path. Pines are one smooth lathe-turned taper with a vertical color
+  gradient — NOT stacked cones (tried, too game-y) and NOT a tiered
+  zigzag lathe profile (tried, renders as harsh shelves). All
+  shadow-casters sit inside the sun's ±10 shadow box — don't place
+  casters outside it (their shadows silently vanish) and don't widen
+  the box (blurs the mailbox shadow).
 - **Story details**: lighthouse islet + tiny village at (1.5, −52) —
   must stay in FRONT of the foothill ridge strip (z ≥ −67) or it gets
   swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.

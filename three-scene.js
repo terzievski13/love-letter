@@ -392,7 +392,7 @@ const ThreeScene = (() => {
       const d2 = dx * dx + dz * dz;
       if (d2 < min2) min2 = d2;
     }
-    return 1 - sstep(0.30, 0.55, Math.sqrt(min2));
+    return 1 - sstep(0.32, 0.46, Math.sqrt(min2));
   }
 
   // Ground colors live in a painted texture (not vertex colors): the mesh's
@@ -408,8 +408,9 @@ const ThreeScene = (() => {
 
     const grassA = new THREE.Color(0x7d9410); // shaded grass
     const grassB = new THREE.Color(0x9cb625); // sunny grass
-    const dirtA  = new THREE.Color(0x9a744a);
-    const dirtB  = new THREE.Color(0xb08a5a);
+    // sandy, desaturated — the earlier redder dirt read rusty on screen
+    const dirtA  = new THREE.Color(0xa08a62);
+    const dirtB  = new THREE.Color(0xbca27a);
     const rock   = new THREE.Color(0x8a7460);
     const col = new THREE.Color(), dirt = new THREE.Color(), out = new THREE.Color();
 
@@ -593,129 +594,194 @@ const ThreeScene = (() => {
       ];
     };
 
-    // --- stepping stones along the path curve ---
+    /* Composition rules (feedback: "scattered randomly without order"):
+       rocks live in nestled family groups (one large + smaller ones
+       leaning on it), flowers grow in single-color clusters at path
+       edges and rock bases, grass mounds run in rhythmic drifts along
+       the cliff lip and the path. Nothing is uniformly sprinkled. */
+
+    // --- stepping stones: flat rounded pads, sunk into the dirt ---
     const stones = [];
-    for (let i = 0; i < 9; i++) {
-      const t = 0.08 + i * 0.105;
+    for (let i = 0; i < 7; i++) {
+      const t = 0.10 + i * 0.13;
       const [bx, bz] = bez(t);
       const [ax, az] = bez(t + 0.02);
-      // small sideways jitter, perpendicular to the path direction
       const dx = ax - bx, dz = az - bz;
       const dl = Math.hypot(dx, dz) || 1;
-      const side = (hash2(3.3, i) - 0.5) * 0.26;
+      const side = (hash2(3.3, i) - 0.5) * 0.16;
       const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
-      const s = 0.15 + hash2(7.7, i) * 0.07;
+      const s = 0.17 + hash2(7.7, i) * 0.05;
       stones.push({
-        x, z, y: groundHeight(x, z) + 0.006,
-        sx: s, sy: 0.12, sz: s * (0.85 + hash2(9.1, i) * 0.3),
+        x, z, y: groundHeight(x, z) + s * 0.05,
+        sx: s, sy: s * 0.26, sz: s * (0.88 + hash2(9.1, i) * 0.24),
         ry: hash2(5.5, i) * Math.PI * 2,
-        color: new THREE.Color().setHSL(0.075, 0.16, 0.52 + hash2(2.9, i) * 0.14)
+        // sandy tones close to the dirt, so pads read as part of the path
+        color: new THREE.Color().setHSL(0.09, 0.13, 0.56 + hash2(2.9, i) * 0.08)
       });
     }
-    const stoneMesh = place(new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(1, 1.15, 0.3, 7),
-      new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
-    stoneMesh.castShadow = true;
-    stoneMesh.receiveShadow = true;
 
-    // --- boulders: cliff lip + path edges + a few loose ones ---
-    // Sphere (indexed → smooth normals) with position-hashed jitter baked in:
-    // rounded soft boulders, not faceted golf balls.
-    const rockGeo = new THREE.SphereGeometry(1, 9, 7);
+    // --- boulders: smooth low-frequency lumps, buried deep ---
+    const rockGeo = new THREE.SphereGeometry(1, 12, 9);
     const rp = rockGeo.attributes.position;
     for (let i = 0; i < rp.count; i++) {
       const px = rp.getX(i), py = rp.getY(i), pz = rp.getZ(i);
-      const j = 1 + (hash2(px * 13.7 + py * 3.1, pz * 7.9) - 0.5) * 0.22;
-      rp.setXYZ(i, px * j, py * j * 0.78, pz * j); // squashed a bit too
+      // fbm over direction = large soft lumps, not per-vertex noise spikes
+      const j = 1 + (fbm2(px * 1.3 + 9.2, (py + pz) * 1.3 + 4.4, 2) - 0.5) * 0.3;
+      rp.setXYZ(i, px * j, py * j * 0.72, pz * j);
     }
     rockGeo.computeVertexNormals();
-    const rockSpots = [
-      [-6.8, -7.6, 0.46], [-3.9, -8.3, 0.34], [1.8, -8.0, 0.5], [5.6, -7.2, 0.3],
-      [8.3, -6.0, 0.4], [1.9, 4.6, 0.16], [3.3, 2.0, 0.2], [-0.9, 1.7, 0.14],
-      [-4.6, 2.8, 0.34], [-6.5, -2.2, 0.26], [5.8, 0.6, 0.3], [7.4, 3.4, 0.22],
-      [-7.8, 4.9, 0.3], [-2.2, 6.8, 0.2]
+    // pads for the path share the boulder geometry (squashed via scale)
+    const stoneMesh = place(new THREE.InstancedMesh(
+      rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
+    stoneMesh.receiveShadow = true;
+
+    // family groups: [groupX, groupZ, [size, offsetX, offsetZ]...]
+    const rockGroups = [
+      [-5.6, -6.9, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],
+      [5.3, -6.3, [0.42, 0, 0], [0.22, -0.42, 0.28]],
+      [-3.8, 2.0, [0.20, 0, 0], [0.12, 0.27, 0.13]],
+      [6.9, 2.4, [0.28, 0, 0], [0.15, 0.36, -0.21]],
+      [3.1, 5.6, [0.15, 0, 0]]
     ];
-    const rocks = rockSpots.map(([x, z, s], i) => ({
-      x, z, y: groundHeight(x, z) + s * 0.42,
-      sx: s, sy: s * 0.8, sz: s * (0.85 + hash2(4.4, i) * 0.3),
-      ry: hash2(6.6, i) * Math.PI * 2, rz: (hash2(8.2, i) - 0.5) * 0.2,
-      color: new THREE.Color().setHSL(0.06, 0.10 + hash2(1.9, i) * 0.08, 0.40 + hash2(3.7, i) * 0.14)
-    }));
+    const rocks = [];
+    rockGroups.forEach(([gx, gz, ...members], gi) => {
+      members.forEach(([s, ox, oz], mi) => {
+        const x = gx + ox, z = gz + oz;
+        rocks.push({
+          x, z, y: groundHeight(x, z) + s * 0.30,
+          sx: s, sy: s * (0.82 + hash2(4.4, gi + mi) * 0.2), sz: s * (0.88 + hash2(5.2, gi * 3 + mi) * 0.22),
+          ry: hash2(6.6, gi * 7 + mi) * Math.PI * 2,
+          color: new THREE.Color().setHSL(0.07, 0.12, 0.36 + hash2(3.7, gi + mi * 2) * 0.07)
+        });
+      });
+    });
     const rockMesh = place(new THREE.InstancedMesh(
       rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), rocks.length), rocks);
     rockMesh.castShadow = true;
     rockMesh.receiveShadow = true;
 
-    // --- wildflowers: chunky stems + faceted heads (nothing thin/planar) ---
-    const patches = [[1.8, 3.6], [-2.4, 3.0], [-4.2, -1.6], [3.8, -3.0]];
-    const petalColors = [0xfff1d6, 0xffd97a, 0xff9a62, 0xf7b8c4];
+    // --- wildflowers: tight single-color clusters where they'd grow —
+    //     along the path edges and at the feet of rocks/pines ---
+    const CREAM = 0xfff1d6, CORAL = 0xff9a72, GOLD = 0xffd27a;
+    const pathSide = (t, off) => {
+      const [bx, bz] = bez(t);
+      const [ax, az] = bez(t + 0.02);
+      const dx = ax - bx, dz = az - bz;
+      const dl = Math.hypot(dx, dz) || 1;
+      return [bx + (-dz / dl) * off, bz + (dx / dl) * off];
+    };
+    const clusters = [
+      { at: pathSide(0.30, 0.62), color: CREAM, n: 5 },
+      { at: pathSide(0.68, -0.60), color: CORAL, n: 4 },
+      { at: [-5.1, -6.2], color: GOLD, n: 5 },   // by the big cliff rocks
+      { at: [5.0, -5.6], color: CREAM, n: 4 },   // by the right rocks
+      { at: [-3.0, -1.2], color: CORAL, n: 4 }   // at the small pine's feet
+    ];
     const stems = [], heads = [];
-    patches.forEach(([cx, cz], pi) => {
-      for (let i = 0; i < 13; i++) {
+    clusters.forEach(({ at: [cx, cz], color, n }, pi) => {
+      for (let i = 0; i < n; i++) {
         const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
-        const rad = Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.85;
+        const rad = 0.06 + Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.24;
         const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
-        if (pathMask(x, z) > 0.3) continue; // keep flowers off the dirt
+        if (pathMask(x, z) > 0.3 || terrainDrop(x, z) > 0.08) continue;
         const y = groundHeight(x, z);
-        const s = 0.8 + hash2(pi * 2.2, i * 9.4) * 0.6;
-        const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.25;
+        const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.5;
+        const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
         stems.push({ x, z, y, sx: 1, sy: s, sz: 1, rz: lean });
         heads.push({
-          x: x + lean * 0.1, z, y: y + 0.1 * s, sx: 1, sy: 1, sz: 1,
-          color: new THREE.Color(petalColors[(pi + i) % petalColors.length])
+          x: x + lean * 0.1, z, y: y + 0.095 * s,
+          sx: s, sy: s * 0.85, sz: s,
+          color: new THREE.Color(color)
         });
       }
     });
-    const stemGeo = new THREE.CylinderGeometry(0.01, 0.016, 0.1, 5);
+    const stemGeo = new THREE.CylinderGeometry(0.01, 0.015, 0.1, 6);
     stemGeo.translate(0, 0.05, 0);
     place(new THREE.InstancedMesh(
-      stemGeo, new THREE.MeshLambertMaterial({ color: 0x4a6b1e }), stems.length), stems);
+      stemGeo, new THREE.MeshLambertMaterial({ color: 0x55702a }), stems.length), stems);
     place(new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(0.035, 0),
+      new THREE.SphereGeometry(0.034, 8, 6),
       new THREE.MeshLambertMaterial({ color: 0xffffff }), heads.length), heads);
 
-    // --- grass tufts: squat solid cones, NOT the banned thin blades ---
+    // --- grass mounds: soft rounded clumps in deliberate drifts, still
+    //     solid geometry (thin blades stay banned) ---
     const tufts = [];
-    for (let i = 0; i < 46; i++) {
-      const x = (hash2(12.7, i * 3.3) - 0.5) * 17;
-      const z = (hash2(21.9, i * 7.1) - 0.5) * 15 + 1;
-      if (Math.hypot(x, z) < 0.6) continue;        // not under the mailbox
-      if (pathMask(x, z) > 0.25) continue;          // not on the path
-      if (terrainDrop(x, z) > 0.05) continue;       // not over the cliff edge
+    const addTuft = (x, z, s, k) => {
+      if (Math.hypot(x, z) < 0.7) return;
+      if (pathMask(x, z) > 0.2 || terrainDrop(x, z) > 0.05) return;
       tufts.push({
-        x, z, y: groundHeight(x, z),
-        sx: 0.8 + hash2(31.1, i) * 0.7, sy: 0.55 + hash2(17.3, i) * 0.5, sz: 0.8 + hash2(13.9, i) * 0.7,
-        ry: hash2(19.7, i) * Math.PI,
-        // stay close to the ground's own greens — darker cones read as
-        // tiny pine trees instead of grass
-        color: new THREE.Color(hash2(23.3, i) > 0.5 ? 0x84a01e : 0x97b02c)
+        x, z, y: groundHeight(x, z) + 0.005,
+        sx: s * (0.9 + hash2(13.9, k) * 0.25), sy: s * 0.55, sz: s,
+        ry: hash2(19.7, k) * Math.PI,
+        // slightly darker than the lawn so mounds read as grass shadowing,
+        // not bright lime pebbles
+        color: new THREE.Color(hash2(23.3, k) > 0.5 ? 0x78911a : 0x86a021)
       });
+    };
+    // a drift hugging the cliff lip — sizes pulse big/small along the run
+    for (let k = 0; k < 12; k++) {
+      const x = -7.5 + k * 1.45 + (hash2(41.3, k) - 0.5) * 0.5;
+      const z = -7.3 + Math.sin(k * 0.55) * 0.55 + (hash2(43.7, k) - 0.5) * 0.4;
+      addTuft(x, z, (0.95 + 0.35 * Math.sin(k * 1.9)) * 1.1, k);
     }
-    // squat rounded clump, clearly grass-bush and not a mini conifer
-    const tuftGeo = new THREE.ConeGeometry(0.105, 0.085, 6);
-    tuftGeo.translate(0, 0.042, 0);
+    // short runs escorting the path, alternating sides, shrinking inward
+    for (let k = 0; k < 6; k++) {
+      const t = 0.16 + k * 0.14;
+      const [x, z] = pathSide(t, (k % 2 ? -1 : 1) * (0.5 + hash2(47.1, k) * 0.2));
+      addTuft(x, z, 1.1 - k * 0.09, 20 + k);
+    }
+    // small companions at the rock groups and pine feet
+    [[-4.9, -6.5], [5.7, -5.9], [-4.0, 1.6], [7.2, 2.7], [-3.3, -1.9]].forEach(([x, z], k) => {
+      addTuft(x, z, 0.9, 40 + k);
+      addTuft(x + 0.3, z + 0.22, 0.6, 50 + k);
+    });
+    // mound = the same smooth boulder geometry squashed low
     place(new THREE.InstancedMesh(
-      tuftGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), tufts.length), tufts);
+      rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), tufts.length),
+      tufts.map((p) => ({ ...p, sx: p.sx * 0.16, sy: p.sy * 0.16, sz: p.sz * 0.16 })));
   }
 
   function buildPines() {
-    // Two stylized pines frame the left of the frame (from the outside
-    // camera, "left" = world −x). Trunk + three stacked smooth cones.
-    // Both sit inside the sun's ±10 shadow box so they cast real shadows.
+    /* Two pines frame the left of the frame (from the outside camera,
+       "left" = world −x). One continuous lathe-turned silhouette with
+       soft drooping tiers instead of stacked hard cones — plus a subtle
+       dark-to-light vertical gradient, so it reads storybook-soft like
+       the mountains rather than low-poly-game. Both sit inside the sun's
+       ±10 shadow box so they cast real shadows. */
     function pine(scale, tiltZ, tiltX) {
       const g = new THREE.Group();
-      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3020 });
-      const leafMat = new THREE.MeshLambertMaterial({ color: 0x2c4630 });
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.10, 0.55, 6), trunkMat);
-      trunk.position.y = 0.275;
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.09, 0.5, 8),
+        new THREE.MeshLambertMaterial({ color: 0x4a3020 })
+      );
+      trunk.position.y = 0.25;
       trunk.castShadow = true;
       g.add(trunk);
-      [[0.6, 0.95, 0.78], [0.45, 0.8, 1.28], [0.3, 0.65, 1.72]].forEach(([r, h, y]) => {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), leafMat);
-        cone.position.y = y;
-        cone.castShadow = true;
-        g.add(cone);
-      });
+
+      // (radius, height) profile: one smooth, slightly concave taper —
+      // a soft storybook cone, no hard tier shelves
+      const prof = [
+        [0.03, 0.28], [0.50, 0.38], [0.44, 0.66], [0.35, 0.96],
+        [0.26, 1.26], [0.17, 1.54], [0.08, 1.80], [0.005, 2.0]
+      ];
+      const geo = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 14);
+      // vertical gradient: shaded base rising to sunlit tip
+      const pos = geo.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const lo = new THREE.Color(0x2a3f2c), hi = new THREE.Color(0x4d6b46);
+      const c = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        c.copy(lo).lerp(hi, sstep(0.3, 1.9, pos.getY(i)));
+        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+      }
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      const foliage = new THREE.Mesh(
+        geo,
+        new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
+      );
+      foliage.castShadow = true;
+      g.add(foliage);
+
       g.scale.setScalar(scale);
       g.rotation.z = tiltZ;
       g.rotation.x = tiltX;
@@ -741,9 +807,17 @@ const ThreeScene = (() => {
     g.scale.setScalar(0.85);
     scene.add(g);
 
-    // rocky outcrop rising from the water
+    // rocky outcrop rising from the water — soft low-frequency lumps
+    const rockGeo = new THREE.SphereGeometry(1, 14, 10);
+    const rpos = rockGeo.attributes.position;
+    for (let i = 0; i < rpos.count; i++) {
+      const px = rpos.getX(i), py = rpos.getY(i), pz = rpos.getZ(i);
+      const j = 1 + (fbm2(px * 1.1 + 3.3, (py - pz) * 1.1 + 7.7, 2) - 0.5) * 0.22;
+      rpos.setXYZ(i, px * j, py * j, pz * j);
+    }
+    rockGeo.computeVertexNormals();
     const rock = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 10, 8),
+      rockGeo,
       new THREE.MeshLambertMaterial({ color: 0x5f4636 })
     );
     rock.scale.set(3.4, 2.1, 2.6);
@@ -762,13 +836,13 @@ const ThreeScene = (() => {
     const btex = new THREE.CanvasTexture(bc);
     btex.colorSpace = THREE.SRGBColorSpace;
     const tower = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.34, 0.5, 2.6, 8),
+      new THREE.CylinderGeometry(0.34, 0.5, 2.6, 14),
       new THREE.MeshLambertMaterial({ map: btex })
     );
     tower.position.y = 2.75;
     g.add(tower);
     const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(0.44, 0.5, 8),
+      new THREE.ConeGeometry(0.44, 0.5, 14),
       new THREE.MeshLambertMaterial({ color: 0x8a3020 })
     );
     roof.position.y = 4.3;
@@ -798,7 +872,9 @@ const ThreeScene = (() => {
     // handful of village houses tucked on the islet around the tower
     const houseMat = new THREE.MeshLambertMaterial({ color: 0xe8d8bc });
     const roofMat = new THREE.MeshLambertMaterial({ color: 0xa04434 });
-    [[-1.5, 0.4], [-0.9, -0.7], [1.2, 0.6], [1.7, -0.4], [0.4, 1.0]].forEach(([hx, hz], i) => {
+    // three houses, huddled together on the leeward side — a hamlet, not
+    // a sprinkle
+    [[-1.4, 0.35], [-0.85, -0.55], [-1.75, -0.35]].forEach(([hx, hz], i) => {
       const hh = 0.3 + hash2(41.7, i) * 0.12;
       const hw = 0.34 + hash2(43.9, i) * 0.1;
       // approximate the dome's local top height so houses hug the rock
@@ -819,7 +895,7 @@ const ThreeScene = (() => {
     // blends it predictably; bob + drift ticked from updateLandscape.
     const boat = new THREE.Group();
     const hull = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.32, 0.32, 1.5, 8, 1, false, Math.PI, Math.PI),
+      new THREE.CylinderGeometry(0.32, 0.32, 1.5, 12, 1, false, Math.PI, Math.PI),
       new THREE.MeshBasicMaterial({ color: 0x4a3226, fog: true })
     );
     hull.rotation.z = Math.PI / 2; // half-cylinder opening up = hull shell
