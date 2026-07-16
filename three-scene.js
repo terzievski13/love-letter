@@ -659,8 +659,9 @@ const ThreeScene = (() => {
           x, z, y: groundHeight(x, z) + s * 0.26,
           sx: s, sy: s * (0.78 + hash2(4.4, gi + mi) * 0.2), sz: s * (0.88 + hash2(5.2, gi * 3 + mi) * 0.22),
           ry: hash2(6.6, gi * 7 + mi) * Math.PI * 2,
-          // neutral gray, light tops — the board's palette swatch
-          color: new THREE.Color().setHSL(0.10, 0.045, 0.42 + hash2(3.7, gi + mi * 2) * 0.14)
+          // neutral gray (board swatch ≈ #9a9a96): near-zero saturation so
+          // the warm sunset key light doesn't push the rocks tan
+          color: new THREE.Color().setHSL(0.55, 0.02, 0.40 + hash2(3.7, gi + mi * 2) * 0.14)
         });
       });
     });
