@@ -585,6 +585,75 @@ const ThreeScene = (() => {
     ranges.forEach(makeRange);
   }
 
+  // Bake N transformed copies of a base geometry into one BufferGeometry.
+  // There's no BufferGeometryUtils here (this project loads bare
+  // three.min.js, no examples/jsm addons), so this is the merge by hand —
+  // done once at scene build time, not per frame.
+  function mergeInstances(baseGeo, matrices) {
+    const positions = [], normals = [], indices = [];
+    const posAttr = baseGeo.attributes.position, normAttr = baseGeo.attributes.normal;
+    const idx = baseGeo.index;
+    const p = new THREE.Vector3(), n = new THREE.Vector3();
+    let vOffset = 0;
+    matrices.forEach((m) => {
+      const nm = new THREE.Matrix3().getNormalMatrix(m);
+      for (let i = 0; i < posAttr.count; i++) {
+        p.fromBufferAttribute(posAttr, i).applyMatrix4(m);
+        n.fromBufferAttribute(normAttr, i).applyMatrix3(nm).normalize();
+        positions.push(p.x, p.y, p.z);
+        normals.push(n.x, n.y, n.z);
+      }
+      for (let i = 0; i < idx.count; i++) indices.push(idx.getX(i) + vOffset);
+      vOffset += posAttr.count;
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+    geo.setIndex(indices);
+    return geo;
+  }
+
+  // A real 3D flower head: `petals` rounded, flattened-ellipsoid petals
+  // (base at the flower centre, tip pointing outward) fanned evenly around
+  // Y and tilted up by `tilt`, merged into one static geometry so it can
+  // still be instanced cheaply. `jitter` (via hash2, so it's stable across
+  // reloads like everything else placed in this function) breaks up the
+  // perfect radial symmetry so it doesn't read as a machine part.
+  function makePetalFlowerGeometry({ petals, length, width, thickness, tilt, jitter, seed }) {
+    const petalGeo = new THREE.SphereGeometry(1, 8, 6);
+    petalGeo.scale(width, thickness, length);
+    petalGeo.translate(0, 0, length); // base at local origin, tip at +Z
+    const matrices = [];
+    for (let i = 0; i < petals; i++) {
+      const theta = (i / petals) * Math.PI * 2 + (hash2(seed, i * 3.1) - 0.5) * jitter;
+      const t = tilt + (hash2(seed + 5.5, i * 1.7) - 0.5) * jitter * 0.6;
+      matrices.push(new THREE.Matrix4().makeRotationY(theta).multiply(new THREE.Matrix4().makeRotationX(-t)));
+    }
+    return mergeInstances(petalGeo, matrices);
+  }
+
+  // A small smooth bell/trumpet (a lathe revolve with a gently scalloped
+  // rim) — used for the pink-spike florets, where a tube shape is correct
+  // rather than discrete petals. `profile` is a list of
+  // [radiusFraction, heightFraction] pairs from centre to rim, scaled by
+  // `radius`.
+  function makeBellGeometry({ radius, petals, profile, scallop }) {
+    const pts = profile.map(([rf, hf]) => new THREE.Vector2(rf * radius, hf * radius));
+    const geo = new THREE.LatheGeometry(pts, petals * 6);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const r = Math.hypot(x, z);
+      if (r < 1e-6) continue;
+      const wave = Math.cos(Math.atan2(z, x) * petals);
+      const rf = 1 + wave * scallop * (r / radius); // scallop bites near the rim, not the centre
+      pos.setXYZ(i, x * rf, y, z * rf);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   function buildScatter() {
     /* Foreground dressing: stepping stones on the path, boulders at the
        cliff lip, wildflowers, chunky grass tufts. One InstancedMesh per
@@ -675,10 +744,10 @@ const ThreeScene = (() => {
       rocks.some((r) => Math.hypot(x - r.x, z - r.z) < r.sx * 1.15);
 
     // ---------- flowers: daisy drifts + buttercups + pink spikes ----------
-    // pink spikes reuse the cone-blade geometry directly below (a thin
-    // spike shape)
-    const blades = [];
-    const stems = [], heads = [], centers = [];
+    // daisy/buttercup heads are real merged petal geometry, pink florets
+    // are small lathe-turned bells (see makePetalFlowerGeometry /
+    // makeBellGeometry above) — not the old flattened spheres
+    const stems = [], daisyHeads = [], buttercupHeads = [], centers = [], florets = [];
     // cluster centers on the knoll flanks (heaviest beside the path, like
     // the board), near the big rocks, along the cliff lip inner side
     const flowerClusters = [
@@ -711,19 +780,29 @@ const ThreeScene = (() => {
         const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.55;
         const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
         if (kind === "pink") {
-          // pink flower spike — reuses the blade cone, thicker and taller
-          blades.push({
-            x, z, y, sx: 0.024, sy: 0.2 * s, sz: 0.024,
-            rx: lean, rz: -lean,
-            color: new THREE.Color(0xc8699c)
-          });
+          // foxglove-style spike: one tall stem carrying 4 small bell
+          // florets, bigger near the base and budding smaller toward the tip
+          const spikeH = 0.34 * s;
+          stems.push({ x, z, y, sx: 1, sy: spikeH * 2.8, sz: 1, rz: lean });
+          const floretN = 4;
+          for (let f = 0; f < floretN; f++) {
+            const t = f / (floretN - 1); // 0 at base, 1 at tip
+            const side = f % 2 === 0 ? 1 : -1; // alternate sides, like a real spike
+            florets.push({
+              x: x + lean * spikeH * t + side * 0.02, z: z + side * 0.008,
+              y: y + spikeH * 0.55 * (0.25 + t * 0.9),
+              sx: 1 - t * 0.4, sy: 1 - t * 0.4, sz: 1 - t * 0.4,
+              rx: side * 0.9, ry: hash2(pi, f * 3.3) * Math.PI * 2, rz: lean,
+              color: new THREE.Color(0xc8699c)
+            });
+          }
           continue;
         }
         stems.push({ x, z, y, sx: 1, sy: s, sz: 1, rz: lean });
         if (kind === "daisy") {
-          heads.push({
+          daisyHeads.push({
             x: x + lean * 0.1, z, y: y + 0.098 * s,
-            sx: s, sy: s * 0.38, sz: s,            // flat white petal disc
+            sx: s, sy: s, sz: s,
             color: new THREE.Color(0xfff6ea)
           });
           centers.push({
@@ -731,10 +810,10 @@ const ThreeScene = (() => {
             sx: s * 0.42, sy: s * 0.34, sz: s * 0.42,
             color: new THREE.Color(0xf2b135)
           });
-        } else { // gold buttercup — same head mesh, rounder and yellow
-          heads.push({
+        } else { // gold buttercup — fewer, rounder petals curling into a cup
+          buttercupHeads.push({
             x: x + lean * 0.1, z, y: y + 0.096 * s,
-            sx: s * 0.62, sy: s * 0.55, sz: s * 0.62,
+            sx: s * 0.9, sy: s * 0.9, sz: s * 0.9,
             color: new THREE.Color(0xffd23e)
           });
         }
@@ -744,17 +823,35 @@ const ThreeScene = (() => {
     stemGeo.translate(0, 0.05, 0);
     place(new THREE.InstancedMesh(
       stemGeo, new THREE.MeshLambertMaterial({ color: 0x557024 }), stems.length), stems);
-    const headGeo = new THREE.SphereGeometry(0.034, 8, 6);
-    place(new THREE.InstancedMesh(
-      headGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), heads.length), heads);
-    place(new THREE.InstancedMesh(
-      headGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), centers.length), centers);
 
-    const bladeGeo = new THREE.ConeGeometry(1, 1, 4);
-    bladeGeo.translate(0, 0.5, 0); // base at origin so lean pivots at the ground
-    const bladeMesh = place(new THREE.InstancedMesh(
-      bladeGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), blades.length), blades);
-    bladeMesh.castShadow = false; // tiny casters = shadow-map noise
+    const centerGeo = new THREE.SphereGeometry(0.034, 8, 6);
+    place(new THREE.InstancedMesh(
+      centerGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), centers.length), centers);
+
+    const daisyGeo = makePetalFlowerGeometry({
+      petals: 12, length: 0.030, width: 0.009, thickness: 0.0035,
+      tilt: 0.12, jitter: 0.06, seed: 21.7
+    });
+    place(new THREE.InstancedMesh(
+      daisyGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+      daisyHeads.length), daisyHeads);
+
+    const buttercupGeo = makePetalFlowerGeometry({
+      petals: 5, length: 0.026, width: 0.017, thickness: 0.006,
+      tilt: 0.55, jitter: 0.05, seed: 34.1
+    });
+    place(new THREE.InstancedMesh(
+      buttercupGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+      buttercupHeads.length), buttercupHeads);
+
+    const floretGeo = makeBellGeometry({
+      radius: 0.018, petals: 5, scallop: 0.16,
+      profile: [[0, 0], [0.3, 0.55], [0.7, 0.85], [1, 0.72]]
+    });
+    const floretMesh = place(new THREE.InstancedMesh(
+      floretGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+      florets.length), florets);
+    floretMesh.castShadow = false; // tiny casters = shadow-map noise
   }
 
   function buildLighthouse() {
