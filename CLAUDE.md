@@ -42,7 +42,7 @@ every session.
 - `feature/alpine-meadow` — deleted. Was a cliffs/pine-trees/chalet
   direction, rejected (didn't like it).
 - `grass-lab/` folder — deleted. Was a standalone grass-blade
-  rendering prototype, abandoned (see "No grass blades" note below).
+  rendering prototype, abandoned at the time.
 
 ## Working features (DO NOT modify unless I ask)
 
@@ -105,14 +105,19 @@ untouched. What the scene is now:
   SEA sits at y=−0.22 (dipped lawn clamped at −0.14 must never flood;
   ripple overlays/streak/boat heights all moved with it). Wide sandy
   path with pebble speckle, NO stepping stones. Gray rocks in nestled
-  clusters (big anchors at bottom frame corners). Grass = spiky clumps
-  of SOLID thin cones, one instance per blade (planes still banned);
-  taller near rocks/edges, shorter near path; nothing may spawn inside
-  a rock footprint. Flowers = white daisies w/ yellow centers +
-  buttercups + pink spikes, in drifts. NO trees (pines cut on request).
-  All shadow-casters sit inside the sun's ±10 shadow box — don't place
-  casters outside it (shadows silently vanish), don't widen the box
-  (blurs the mailbox shadow), and blades don't cast (shadow-map noise).
+  clusters (big anchors at bottom frame corners). NO grass — removed
+  entirely (was a real 3D tuft model, grass-tuft.glb; several
+  iterations — card billboards, then the tuft model, brightness/contrast
+  tuning — ended with the user asking to cut it, so the ground is bare
+  between rocks/flowers/path for now). `grass-tuft.glb` is still in the
+  project root (the user's modeled asset) but nothing loads it; the
+  generated `grass-tuft-data.js` extraction was deleted since it's
+  regeneratable from the .glb if grass comes back. Flowers = white
+  daisies w/ yellow centers + buttercups + pink spikes, in drifts. NO
+  trees (pines cut on request). All shadow-casters sit inside the sun's
+  ±10 shadow box — don't place casters outside it (shadows silently
+  vanish), don't widen the box (blurs the mailbox shadow), and blades
+  don't cast (shadow-map noise).
 - **Story details**: lighthouse islet + tiny village at (1.5, −52) —
   must stay in FRONT of the foothill ridge strip (z ≥ −67) or it gets
   swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.
@@ -134,10 +139,6 @@ Possible next tweaks (user has not reviewed the rebuild yet):
 - Water: deep blue far (#1e3248) → clean near-shore blue (#68a8c4), warm glitter streak
 - Mountains: real lit geometry (see above), warm rock tones, warm-tinted
   snow (#f6ddd0 — never pure white), fog kept at (30, 175)
-- Grass blades: thin PlaneGeometry blades are still banned ("floating
-  matchsticks") — current grass detail is painted ground texture plus
-  squat SOLID cone tufts, a different technique that reads fine. Never
-  reintroduce thin planes.
 - Canvas-texture gotcha learned the hard way: THREE.Color stores hex as
   LINEAR; call convertLinearToSRGB() before writing pixels to a canvas
   that becomes an sRGB texture, or every color double-darkens.

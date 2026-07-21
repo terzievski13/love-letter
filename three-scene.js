@@ -616,10 +616,9 @@ const ThreeScene = (() => {
 
     /* Layout copied from the user's foreground concept board:
        gray rocks in clusters (big anchors at the frame corners, escorts
-       flanking the path), spiky grass clumps everywhere — taller near
-       rocks and edges, shorter near the path — and flower drifts of
-       white daisies, yellow buttercups and pink spikes on the knoll's
-       flanks. Nothing evenly sprinkled; everything clustered. */
+       flanking the path), and flower drifts of white daisies, yellow
+       buttercups and pink spikes on the knoll's flanks. Nothing evenly
+       sprinkled; everything clustered. */
     const pathSide = (t, off) => {
       const [bx, bz] = bez(t);
       const [ax, az] = bez(t + 0.02);
@@ -670,88 +669,15 @@ const ThreeScene = (() => {
     rockMesh.castShadow = true;
     rockMesh.receiveShadow = true;
 
-    // ---------- grass clumps: fans of SOLID thin cones ----------
-    // The board shows spiky tufts. Blades here are narrow 3D cones — real
-    // solid geometry, not the banned thin planes. One instance per blade,
-    // one InstancedMesh total.
-    const blades = [];
-    const bladeCol = new THREE.Color();
-    // nothing may grow inside a boulder's footprint
+    // nothing may grow inside a boulder's footprint (still used by the
+    // flower placement below)
     const insideRock = (x, z) =>
       rocks.some((r) => Math.hypot(x - r.x, z - r.z) < r.sx * 1.15);
-    function addClump(x, z, s, k) {
-      if (Math.hypot(x, z) < 0.75) return;
-      if (pathMask(x, z) > 0.25 || terrainDrop(x, z) > 0.06) return;
-      if (insideRock(x, z)) return;
-      const y = groundHeight(x, z);
-      const n = 6 + Math.floor(hash2(61.3, k) * 4);
-      for (let b = 0; b < n; b++) {
-        const a = (b / n) * Math.PI * 2 + hash2(k * 1.7, b) * 1.4;
-        const tilt = 0.12 + hash2(k * 2.3, b * 3.1) * 0.38;
-        const h = s * (0.13 + hash2(k * 3.9, b * 1.3) * 0.17);
-        const dry = hash2(k * 7.1, b * 2.9) > 0.9; // occasional dry-yellow blade
-        blades.push({
-          x: x + Math.cos(a) * 0.025, z: z + Math.sin(a) * 0.025, y,
-          sx: 0.016 + hash2(k, b) * 0.008, sy: h, sz: 0.016,
-          // small-angle lean outward from the clump centre
-          rx: tilt * Math.sin(a), rz: -tilt * Math.cos(a),
-          color: dry
-            ? bladeCol.setHSL(0.14, 0.5, 0.48 + hash2(k * 9.7, b) * 0.1).clone()
-            : bladeCol.setHSL(0.21, 0.5, 0.30 + hash2(k * 9.7, b) * 0.13).clone()
-        });
-      }
-    }
-    let ck = 0;
-    // escorts down both sides of the path — a near-continuous fringe,
-    // short near the dirt with a taller second row behind
-    for (let i = 0; i < 14; i++) {
-      const t = 0.08 + i * 0.066;
-      [1, -1].forEach((side) => {
-        const [x, z] = pathSide(t, side * (0.95 + hash2(71.3, ck) * 0.35));
-        addClump(x, z, 0.75, ck++);
-        if (i % 2 === 0) {
-          const [x2, z2] = pathSide(t + 0.03, side * (1.55 + hash2(73.9, ck) * 0.4));
-          addClump(x2, z2, 1.0, ck++);
-        }
-      });
-    }
-    // tall companions around every rock group
-    rockGroups.forEach(([gx, gz, [s0]]) => {
-      for (let i = 0; i < 4; i++) {
-        const a = hash2(gx * 3.1, gz * 5.7 + i) * Math.PI * 2;
-        const r = s0 + 0.28 + hash2(gz * 2.9, i) * 0.3;
-        addClump(gx + Math.cos(a) * r, gz + Math.sin(a) * r, 1.3, ck++);
-      }
-    });
-    // tall double drift along the cliff lip — tufts should break the
-    // horizon line against the water almost continuously, like the board
-    for (let i = 0; i < 20; i++) {
-      const x = -8.2 + i * 0.95 + (hash2(41.3, i) - 0.5) * 0.55;
-      const z = -7.2 + Math.sin(i * 0.55) * 0.45 + (hash2(43.7, i) - 0.5) * 0.4;
-      addClump(x, z, 1.15 + 0.3 * hash2(45.1, i), ck++);
-      if (i % 2 === 1) addClump(x + 0.4, z + 0.75, 0.9, ck++);
-    }
-    // clusters over the knoll flanks — lush, like the board
-    for (let i = 0; i < 22; i++) {
-      const a = hash2(53.9, i * 3.7) * Math.PI * 2;
-      const r = 3.2 + hash2(57.1, i * 1.9) * 2.4;
-      const cx = Math.cos(a) * r, cz = Math.sin(a) * r;
-      for (let j = 0; j < 4; j++) {
-        addClump(cx + (hash2(i, j * 7.7) - 0.5) * 1.1, cz + (hash2(j, i * 5.3) - 0.5) * 1.1, 1.0, ck++);
-      }
-    }
-    // paired fillers further out
-    for (let i = 0; i < 32; i++) {
-      const a = hash2(63.7, i * 2.3) * Math.PI * 2;
-      const r = 4.5 + hash2(67.9, i * 4.1) * 3.8;
-      const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      addClump(x, z, 0.95, ck++);
-      addClump(x + 0.4, z + 0.3, 0.65, ck++);
-    }
-    // (the blade InstancedMesh is created AFTER the flower section — the
-    // pink flower spikes below reuse the blade list)
 
     // ---------- flowers: daisy drifts + buttercups + pink spikes ----------
+    // pink spikes reuse the cone-blade geometry directly below (a thin
+    // spike shape)
+    const blades = [];
     const stems = [], heads = [], centers = [];
     // cluster centers on the knoll flanks (heaviest beside the path, like
     // the board), near the big rocks, along the cliff lip inner side
@@ -828,7 +754,7 @@ const ThreeScene = (() => {
     bladeGeo.translate(0, 0.5, 0); // base at origin so lean pivots at the ground
     const bladeMesh = place(new THREE.InstancedMesh(
       bladeGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), blades.length), blades);
-    bladeMesh.castShadow = false; // ~900 tiny casters = shadow-map noise
+    bladeMesh.castShadow = false; // tiny casters = shadow-map noise
   }
 
   function buildLighthouse() {
