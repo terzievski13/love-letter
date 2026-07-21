@@ -39,6 +39,13 @@ every session.
   point-light glow at the mailbox itself (a lit window in the dark).
   Reserved for the real-time day/night feature below — don't build
   that feature until asked, but don't discard this branch either.
+- **`picnic-dome-no-grass`** — not a separate line of work, just a
+  named checkpoint: it's an ancestor commit of `picnic-dome` (not a
+  diverging branch), sitting right after grass was cut but *before*
+  the flower petal-geometry rework. Grass = removed. Flowers = the
+  old flattened-sphere/cone placeholder shapes. Kept as a reference
+  point in case the daisy/buttercup/spike rework needs comparing
+  against or backing out independently of the grass decision.
 - `feature/alpine-meadow` — deleted. Was a cliffs/pine-trees/chalet
   direction, rejected (didn't like it).
 - `grass-lab/` folder — deleted. Was a standalone grass-blade
@@ -113,7 +120,14 @@ untouched. What the scene is now:
   project root (the user's modeled asset) but nothing loads it; the
   generated `grass-tuft-data.js` extraction was deleted since it's
   regeneratable from the .glb if grass comes back. Flowers = white
-  daisies w/ yellow centers + buttercups + pink spikes, in drifts. NO
+  daisies w/ yellow centers + buttercups + pink spikes, in drifts —
+  real 3D petal geometry (not flattened spheres): daisies/buttercups
+  are individually-shaped rounded petals fanned around a centre and
+  merged into one static geometry (`makePetalFlowerGeometry` /
+  `mergeInstances` in three-scene.js — hand-rolled merge, no
+  BufferGeometryUtils since this project loads bare three.min.js);
+  pink spikes are a tall stem of small lathe-turned bell florets
+  (`makeBellGeometry`), foxglove-style. NO
   trees (pines cut on request). All shadow-casters sit inside the sun's
   ±10 shadow box — don't place casters outside it (shadows silently
   vanish), don't widen the box (blurs the mailbox shadow), and blades
