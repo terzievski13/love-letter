@@ -2,12 +2,38 @@
 
 const { useState, useEffect, useRef } = React;
 
-/* A single envelope. When opened, the flap rotates up and a paper letter
-   appears next to the envelope and unfolds. */
+/* A single envelope. When opened, it pulls out of the fanned pile, grows
+   slightly toward the viewer, then settles down into its reading spot —
+   at which point the flap opens and the letter appears above it. */
+const STACK_Y = 44;       // vertical offset of the fanned pile
+const PULL_MS = 1700;     // lift out of the pile, slight grow toward viewer
+const SETTLE_MS = 1300;   // shrink back down into the reading slot
+// SETTLE_Y/SETTLE_SCALE aren't arbitrary: the read-phase layout below centers
+// a flex column of [Letter (200px tall at the moment it mounts) + 18px gap +
+// small envelope (154px)] — solving for the envelope's center in that block
+// gives screen-center + 109px, and 240/360 is exactly the small envelope's
+// width ratio. So settle's end position lands pixel-for-pixel where the
+// flex layout is about to put the envelope, and the handoff to the read
+// phase's JSX below can happen with no visual jump.
+const SETTLE_Y = 109;
+const SETTLE_SCALE = 240 / 360;
+
 function Envelope({ letter, idx, total, onClick, isOpen, onClose }) {
   const fan = (idx - (total - 1) / 2) * 6; // degrees
+  // phase machine: stack -> lift -> settle -> read
+  const [phase, setPhase] = useState("stack");
 
-  if (isOpen) {
+  useEffect(() => {
+    if (isOpen) {
+      setPhase("lift");
+      const t1 = setTimeout(() => setPhase("settle"), PULL_MS);
+      const t2 = setTimeout(() => setPhase("read"), PULL_MS + SETTLE_MS);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+    setPhase("stack");
+  }, [isOpen]);
+
+  if (phase === "read") {
     // when open: render envelope + paper as a flex pair, centered
     return (
       <div
@@ -29,8 +55,6 @@ function Envelope({ letter, idx, total, onClick, isOpen, onClose }) {
         <div style={{
           width: 240, height: 154,
           filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.4))",
-          opacity: 0.92,
-          animation: "fadeIn 0.5s 0.1s both",
           perspective: 800
         }}>
           <EnvelopeSVG letter={letter} isOpen={true} small />
@@ -39,26 +63,45 @@ function Envelope({ letter, idx, total, onClick, isOpen, onClose }) {
     );
   }
 
+  let transform, transition;
+  if (phase === "stack") {
+    transform = `translate(${fan * 3}px, ${idx * 4 + STACK_Y}px) rotate(${fan}deg) scale(1)`;
+    transition = "transform 0.6s cubic-bezier(.4,1.4,.5,1)";
+  } else if (phase === "lift") {
+    // pulled up and toward the viewer, growing slightly
+    transform = "translate(0px, -40px) rotate(0deg) scale(1.08)";
+    transition = `transform ${PULL_MS}ms cubic-bezier(.22,.85,.32,1.12)`;
+  } else {
+    // settle: shrinks down into the exact spot the read-phase layout expects
+    transform = `translate(0px, ${SETTLE_Y}px) rotate(0deg) scale(${SETTLE_SCALE})`;
+    transition = `transform ${SETTLE_MS}ms cubic-bezier(.4,0,.2,1)`;
+  }
+
+  const svgIsOpen = phase === "settle";
+  const clickable = phase === "stack";
+
   return (
     <div
-      onClick={onClick}
+      onClick={clickable ? onClick : undefined}
       style={{
         position: "absolute",
         left: "50%",
-        top: "55%",
+        top: "50%",
         width: 360,
         height: 230,
         marginLeft: -180,
         marginTop: -115,
-        transform: `translate(${fan * 3}px, ${idx * 4}px) rotate(${fan}deg)`,
-        transition: "transform 0.6s cubic-bezier(.4,1.4,.5,1)",
-        cursor: "pointer",
-        zIndex: 10 + idx,
-        filter: "drop-shadow(0 6px 12px rgba(0,0,0,0.25))",
+        transform,
+        transition,
+        cursor: clickable ? "pointer" : "default",
+        zIndex: clickable ? 10 + idx : 90,
+        filter: clickable
+          ? "drop-shadow(0 6px 12px rgba(0,0,0,0.25))"
+          : "drop-shadow(0 24px 36px rgba(0,0,0,0.4))",
         perspective: 1000
       }}
     >
-      <EnvelopeSVG letter={letter} isOpen={false} />
+      <EnvelopeSVG letter={letter} isOpen={svgIsOpen} />
     </div>
   );
 }
@@ -100,23 +143,26 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
         </>
       )}
 
-      {/* the address area when closed */}
-      {!isOpen && (
-        <g style={{ fontFamily: "Caveat, cursive" }}>
-          <line x1="120" y1="120" x2="280" y2="120" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-          <line x1="120" y1="140" x2="260" y2="140" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-          <line x1="120" y1="160" x2="270" y2="160" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-          <text x="120" y="118" fill={dark} fontSize="22">For my love</text>
-          <text x="120" y="138" fill={dark} fontSize="16" opacity="0.7">— {letter.title}</text>
-          <text x="120" y="158" fill={dark} fontSize="13" opacity="0.55">{letter.date}</text>
-          {/* stamp */}
-          <g>
-            <rect x="290" y="14" width="50" height="60" fill={shade(c, 18)} stroke={dark} strokeWidth="0.8" strokeDasharray="2 2" />
-            <circle cx="315" cy="44" r="14" fill={wax} opacity="0.85" />
-            <text x="315" y="49" textAnchor="middle" fill="#fff3e6" fontSize="14" fontFamily="serif">♥</text>
-          </g>
+      {/* the address area when closed — fades out rather than popping instantly,
+          so it doesn't go blank before the flap's rotation becomes visible */}
+      <g style={{
+        fontFamily: "Caveat, cursive",
+        opacity: isOpen ? 0 : 1,
+        transition: "opacity 0.3s ease"
+      }}>
+        <line x1="120" y1="120" x2="280" y2="120" stroke={dark} strokeWidth="0.6" opacity="0.4" />
+        <line x1="120" y1="140" x2="260" y2="140" stroke={dark} strokeWidth="0.6" opacity="0.4" />
+        <line x1="120" y1="160" x2="270" y2="160" stroke={dark} strokeWidth="0.6" opacity="0.4" />
+        <text x="120" y="118" fill={dark} fontSize="22">For my love</text>
+        <text x="120" y="138" fill={dark} fontSize="16" opacity="0.7">— {letter.title}</text>
+        <text x="120" y="158" fill={dark} fontSize="13" opacity="0.55">{letter.date}</text>
+        {/* stamp */}
+        <g>
+          <rect x="290" y="14" width="50" height="60" fill={shade(c, 18)} stroke={dark} strokeWidth="0.8" strokeDasharray="2 2" />
+          <circle cx="315" cy="44" r="14" fill={wax} opacity="0.85" />
+          <text x="315" y="49" textAnchor="middle" fill="#fff3e6" fontSize="14" fontFamily="serif">♥</text>
         </g>
-      )}
+      </g>
 
       {/* flap — uses CSS 3D, parent has perspective */}
       <g style={{
@@ -129,15 +175,13 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
               fill={shade(c, -5)} stroke={dark} strokeWidth="1.5" />
         <path d="M 0 0 L 180 110 L 360 0"
               fill="none" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-        {/* wax seal — only when closed */}
-        {!isOpen && (
-          <g transform="translate(180, 100)">
-            <circle r="22" fill={wax} />
-            <circle r="22" fill={shade(wax, 15)} opacity="0.5" />
-            <circle r="18" fill="none" stroke={shade(wax, -25)} strokeWidth="1" opacity="0.6" />
-            <text textAnchor="middle" y="6" fill={shade(wax, -40)} fontSize="20" fontFamily="serif" fontStyle="italic">L</text>
-          </g>
-        )}
+        {/* wax seal — fades out with the address rather than popping instantly */}
+        <g transform="translate(180, 100)" style={{ opacity: isOpen ? 0 : 1, transition: "opacity 0.3s ease" }}>
+          <circle r="22" fill={wax} />
+          <circle r="22" fill={shade(wax, 15)} opacity="0.5" />
+          <circle r="18" fill="none" stroke={shade(wax, -25)} strokeWidth="1" opacity="0.6" />
+          <text textAnchor="middle" y="6" fill={shade(wax, -40)} fontSize="20" fontFamily="serif" fontStyle="italic">L</text>
+        </g>
       </g>
     </svg>
   );
