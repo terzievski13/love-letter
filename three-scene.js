@@ -419,7 +419,12 @@ const ThreeScene = (() => {
     // noise-wobbled edge instead of a ruler line
     const w = 0.5 + 0.3 * sstep(0.5, 7, z);
     const wob = (fbm2(x * 1.1 + 5.5, z * 1.1 + 2.2, 2) - 0.5) * 0.22;
-    return 1 - sstep(w, w + 0.3, Math.sqrt(min2) + wob);
+    const trail = 1 - sstep(w, w + 0.3, Math.sqrt(min2) + wob);
+    // rounded dirt clearing under the mailbox itself, a bit wider than the
+    // path it caps (per the reference image: the box stands on bare ground)
+    const cd = Math.hypot(x - 0.1, z - 0.3);
+    const clearing = 1 - sstep(0.95, 1.3, cd + wob);
+    return Math.max(trail, clearing);
   }
 
   // Ground colors live in a painted texture (not vertex colors): the mesh's
@@ -460,7 +465,7 @@ const ThreeScene = (() => {
         }
 
         // dirt path — only bother inside its bounding box
-        if (x > -3.8 && x < 5.2 && z > -0.6 && z < 8.4) {
+        if (x > -3.8 && x < 5.2 && z > -1.4 && z < 8.4) {
           const pm = pathMask(x, z);
           if (pm > 0) {
             dirt.copy(dirtA).lerp(dirtB, fbm2(x / 2.4 + 31.1, z / 2.4 + 5.5, 2));

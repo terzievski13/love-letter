@@ -117,7 +117,9 @@ untouched. What the scene is now:
   left of the mailbox, bows LEFT, then swings back to arrive at the
   mailbox straight from the FRONT (C2 sits directly in front of P3 in x
   so the final tangent runs along −z; move C2 sideways and the approach
-  goes diagonal again). P0 sits just past the frame's bottom edge —
+  goes diagonal again), where it opens into a rounded dirt CLEARING the
+  mailbox stands on (the `clearing` disc in `pathMask`, a bit wider than
+  the path per the reference). P0 sits just past the frame's bottom edge —
   found by PROJECTING through the camera (bottom edge meets ground at
   z≈4.0–4.3 near x=0; the projection helper needs
   camera.updateMatrixWorld(true) first), never eyeballed. Stones are
