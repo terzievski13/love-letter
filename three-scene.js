@@ -59,7 +59,7 @@ const ThreeScene = (() => {
     scene.background = new THREE.Color(0xeebA90);
     scene.fog = new THREE.Fog(0xeeb890, 30, 175);
 
-    camera = new THREE.PerspectiveCamera(38, initW / initH, 0.1, 200);
+    camera = new THREE.PerspectiveCamera(70, initW / initH, 0.1, 200);
     camera.position.set(...CAM.outside.pos);
     camera.lookAt(...CAM.outside.look);
 
