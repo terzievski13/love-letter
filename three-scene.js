@@ -387,16 +387,29 @@ const ThreeScene = (() => {
     return h * (1 - drop) + (-2.5) * drop + cliffNoise;
   }
 
-  // 1 on the dirt path, 0 off it. Distance to a quadratic bezier from the
-  // bottom-right of the outside camera's frame to the mailbox base — sampled,
-  // which is plenty accurate for coloring and stone placement.
-  const PATH_P0 = [-1.4, 4.2], PATH_P1 = [0.85, 2.3], PATH_P2 = [0.4, 0.85];
+  // 1 on the dirt path, 0 off it. Distance to a CUBIC bezier (sampled, which
+  // is plenty accurate for coloring and stone placement). Cubic because the
+  // reference image's path is a gentle S: it enters at the bottom-left, bows
+  // out to the LEFT, then swings back to arrive at the mailbox straight from
+  // the front (final tangent runs along -z into P3 — keep C2 directly in
+  // front of P3 in x or the approach goes diagonal again).
+  // P0 sits just past the frame's bottom edge (which meets the ground at
+  // z≈4.0-4.3 here — found by projecting through the camera, don't eyeball
+  // it) so the path flows in from off-screen left-of-center, like the
+  // reference image
+  const PATH_P0 = [0.5, 4.7], PATH_C1 = [-1.3, 3.4],
+        PATH_C2 = [0.4, 2.2], PATH_P3 = [0.4, 0.85];
+  function pathBez(t) {
+    const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    return [
+      a * PATH_P0[0] + b * PATH_C1[0] + c * PATH_C2[0] + d * PATH_P3[0],
+      a * PATH_P0[1] + b * PATH_C1[1] + c * PATH_C2[1] + d * PATH_P3[1]
+    ];
+  }
   function pathMask(x, z) {
     let min2 = Infinity;
-    for (let i = 0; i <= 24; i++) {
-      const t = i / 24, u = 1 - t;
-      const px = u * u * PATH_P0[0] + 2 * u * t * PATH_P1[0] + t * t * PATH_P2[0];
-      const pz = u * u * PATH_P0[1] + 2 * u * t * PATH_P1[1] + t * t * PATH_P2[1];
+    for (let i = 0; i <= 32; i++) {
+      const [px, pz] = pathBez(i / 32);
       const dx = x - px, dz = z - pz;
       const d2 = dx * dx + dz * dz;
       if (d2 < min2) min2 = d2;
@@ -447,17 +460,18 @@ const ThreeScene = (() => {
         }
 
         // dirt path — only bother inside its bounding box
-        if (x > -3.4 && x < 5.2 && z > -0.6 && z < 8.4) {
+        if (x > -3.8 && x < 5.2 && z > -0.6 && z < 8.4) {
           const pm = pathMask(x, z);
           if (pm > 0) {
             dirt.copy(dirtA).lerp(dirtB, fbm2(x / 2.4 + 31.1, z / 2.4 + 5.5, 2));
             col.lerp(dirt, pm);
-            // pebble speckle (the board's gravel "PATH DETAIL") — chunky
-            // and high-contrast, since texture filtering softens it a lot
+            // pebble speckle — gentle: at ~11 texels per world unit any
+            // high-contrast blob magnifies into a blurry dark smudge on
+            // screen (looked like stray shadows on the widened path)
             if (pm > 0.4) {
-              const peb = valueNoise2(x * 3.5 + 61.7, z * 3.5 + 23.3);
-              if (peb > 0.74) col.multiplyScalar(0.74);
-              else if (peb < 0.14) col.multiplyScalar(1.22);
+              const peb = valueNoise2(x * 5.5 + 61.7, z * 5.5 + 23.3);
+              if (peb > 0.72) col.multiplyScalar(0.88);
+              else if (peb < 0.16) col.multiplyScalar(1.1);
             }
           }
         }
@@ -674,9 +688,9 @@ const ThreeScene = (() => {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const r = Math.hypot(x, z);
       if (r < 1e-6) continue;
-      // modest ±12% — enough to break the perfect circle, small enough
-      // that the puck silhouette survives (boulders use ±30-50%)
-      const j = 1 + (fbm2(x * 1.4 + 3.7, z * 1.4 + 8.1, 2) - 0.5) * 0.24;
+      // ±16% — irregular enough that flattened slabs read as natural
+      // pavers, small enough the silhouette survives (boulders use ±30-50%)
+      const j = 1 + (fbm2(x * 1.4 + 3.7, z * 1.4 + 8.1, 2) - 0.5) * 0.32;
       pos.setXYZ(i, x * j, y, z * j);
     }
     // de-index so the chamfer shades as separate facets — shared-vertex
@@ -707,13 +721,7 @@ const ThreeScene = (() => {
       scene.add(mesh);
       return mesh;
     }
-    const bez = (t) => {
-      const u = 1 - t;
-      return [
-        u * u * PATH_P0[0] + 2 * u * t * PATH_P1[0] + t * t * PATH_P2[0],
-        u * u * PATH_P0[1] + 2 * u * t * PATH_P1[1] + t * t * PATH_P2[1]
-      ];
-    };
+    const bez = pathBez;
 
     /* Layout copied from the user's foreground concept board:
        gray rocks in clusters (big anchors at the frame corners, escorts
@@ -805,22 +813,25 @@ const ThreeScene = (() => {
       const [ax, az] = bez(t + 0.02);
       const dx = ax - bx, dz = az - bz;
       const dl = Math.hypot(dx, dz) || 1;
-      const side = (hash2(3.3, i) - 0.5) * 0.24;
+      const side = (hash2(3.3, i) - 0.5) * 0.3;
       const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
-      const s = 0.17 + hash2(7.7, i) * 0.05;
+      const s = 0.15 + hash2(7.7, i) * 0.10;
       stones.push({
-        // lathe base sits at y=0, so sink the bottom bevel into the dirt
-        x, z, y: groundHeight(x, z) - s * 0.1,
-        sx: s, sy: s * 0.6, sz: s * (0.88 + hash2(9.1, i) * 0.24),
+        // flat worn slabs like the reference image: same puck profile but
+        // squashed low and sunk in, so just a thin rounded edge shows —
+        // embedded in the dirt, not standing on it
+        x, z, y: groundHeight(x, z) - s * 0.06,
+        sx: s, sy: s * 0.3, sz: s * (0.72 + hash2(9.1, i) * 0.45),
         ry: hash2(5.5, i) * Math.PI * 2,
-        // sandy tones close to the dirt, so pads read as part of the path
-        color: new THREE.Color().setHSL(0.09, 0.13, 0.56 + hash2(2.9, i) * 0.08)
+        // gray stone, a shade cooler and darker than the sandy dirt
+        color: new THREE.Color().setHSL(0.08, 0.06, 0.48 + hash2(2.9, i) * 0.10)
       });
     }
     const stoneMesh = place(new THREE.InstancedMesh(
       stoneGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
     stoneMesh.receiveShadow = true;
-    stoneMesh.castShadow = true; // raised pucks need contact shadows or they float
+    // no castShadow: slabs this flat only smear blurry shadow-map blotches
+    // across the dirt beside them
 
     // nothing may grow on top of a stone either
     const insideStone = (x, z) =>

@@ -111,18 +111,26 @@ untouched. What the scene is now:
   itself can never move) so the mailbox crests a hill — this is why the
   SEA sits at y=−0.22 (dipped lawn clamped at −0.14 must never flood;
   ripple overlays/streak/boat heights all moved with it). Path (matched
-  to the user's hand-annotated sketch, July 2026): a WIDE worn-dirt band
-  (`pathMask`, w ≈ 0.5–0.8) sweeping a clear bezier arc from bottom-left
-  up to the mailbox (`PATH_P0/P1/P2`; P1 well off the chord is what makes
-  the bow), with raised puck stepping stones on top — flat top, vertical
-  side wall, chamfered edge (`makeStoneGeometry`, a lathe profile
-  de-indexed for faceted shading; x/z-only jitter keeps the wall a true
-  vertical cut). Stones are arc-length spaced along the curve
-  (`tAtFraction` in `buildScatter`) so they don't bunch near either end,
-  and they cast shadows (they stand proud of the grass now). This
-  replaced two earlier looks in turn: "no stones, wide sandy path", then
-  "narrow trail + flat melted-in sphere pads". The small "path left"
-  rock cluster was moved to (−2.4, 2.7) to clear the widened path.
+  to the user's AI-render reference image, July 2026): a WIDE worn-dirt
+  band (`pathMask`, w ≈ 0.5–0.8) on a CUBIC bezier S-curve
+  (`PATH_P0/C1/C2/P3`, `pathBez`) — enters at the frame's bottom edge
+  left of the mailbox, bows LEFT, then swings back to arrive at the
+  mailbox straight from the FRONT (C2 sits directly in front of P3 in x
+  so the final tangent runs along −z; move C2 sideways and the approach
+  goes diagonal again). P0 sits just past the frame's bottom edge —
+  found by PROJECTING through the camera (bottom edge meets ground at
+  z≈4.0–4.3 near x=0; the projection helper needs
+  camera.updateMatrixWorld(true) first), never eyeballed. Stones are
+  flat worn slab pavers embedded in the dirt: `makeStoneGeometry` lathe
+  puck profile squashed low (sy = s·0.3), de-indexed for faceted
+  shading, x/z-only jitter, gray-tan, arc-length spaced along the curve
+  (`tAtFraction`) so they don't bunch; castShadow OFF (flat slabs only
+  smear shadow-map blotches). Path pebble speckle kept LOW-contrast —
+  at ~11 texels/world-unit any dark blob magnifies into what looks like
+  a stray shadow. Earlier looks, in order: "no stones, wide sandy path"
+  → "narrow trail + melted sphere pads" → "raised faceted pucks on a
+  right-bowing quadratic" → current. The small "path left" rock cluster
+  lives at (−2.4, 2.7), clear of the current curve.
   Gray rocks in nestled
   clusters (big anchors at bottom frame corners). NO grass — removed
   entirely (was a real 3D tuft model, grass-tuft.glb; several
