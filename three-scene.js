@@ -393,11 +393,12 @@ const ThreeScene = (() => {
   // out to the LEFT, then swings back to arrive at the mailbox straight from
   // the front (final tangent runs along -z into P3 — keep C2 directly in
   // front of P3 in x or the approach goes diagonal again).
-  // P0 sits just past the frame's bottom edge (which meets the ground at
-  // z≈4.0-4.3 here — found by projecting through the camera, don't eyeball
-  // it) so the path flows in from off-screen left-of-center, like the
-  // reference image
-  const PATH_P0 = [0.5, 4.7], PATH_C1 = [-1.75, 3.4],
+  // P0 sits just past the frame's bottom edge (found by projecting through
+  // the camera, don't eyeball it) so the path flows in from off-screen
+  // left-of-center, like the reference image. Re-projected after the FOV
+  // widened from 38→70 (wider lens pushed the visible bottom edge further
+  // out, to z≈5.5-6.4 near x≈0.7-1.3) — bump this again if FOV changes.
+  const PATH_P0 = [1.34, 6.8], PATH_C1 = [-1.75, 3.4],
         PATH_C2 = [-0.35, 2.2], PATH_P3 = [-0.3, 0.7];
   function pathBez(t) {
     const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
@@ -850,24 +851,24 @@ const ThreeScene = (() => {
     // cluster centers on the knoll flanks (heaviest beside the path, like
     // the board), near the big rocks, along the cliff lip inner side
     const flowerClusters = [
-      { at: pathSide(0.25, 1.4), kind: "daisy", n: 10 },
-      { at: pathSide(0.5, -1.5), kind: "daisy", n: 9 },
-      { at: pathSide(0.8, 1.6), kind: "gold", n: 8 },
-      { at: pathSide(0.14, -1.3), kind: "daisy", n: 8 },
-      { at: [-4.2, 3.6], kind: "daisy", n: 10 },  // by the big left anchor
-      { at: [5.4, 3.0], kind: "gold", n: 8 },     // by the big right anchor
-      { at: [-3.2, 2.0], kind: "daisy", n: 9 },
-      { at: [2.6, -2.8], kind: "daisy", n: 9 },
-      { at: [-1.6, -5.6], kind: "gold", n: 8 },
-      { at: [-4.9, -6.0], kind: "daisy", n: 9 },  // cliff-lip rocks
-      { at: [4.8, -5.5], kind: "daisy", n: 8 },
-      { at: [-6.2, -3.4], kind: "pink", n: 5 },
-      { at: [6.6, -0.6], kind: "daisy", n: 9 },
-      { at: [0.8, 2.9], kind: "gold", n: 7 },     // right where the path crests
-      { at: [-2.1, 5.4], kind: "pink", n: 5 },
-      { at: [1.5, -6.3], kind: "daisy", n: 8 },   // crest lip, breaks horizon
-      { at: [-6.8, 1.4], kind: "gold", n: 7 },
-      { at: [3.6, 4.6], kind: "daisy", n: 8 }
+      { at: pathSide(0.25, 1.4), kind: "daisy", n: 13 },
+      { at: pathSide(0.5, -1.5), kind: "daisy", n: 12 },
+      { at: pathSide(0.8, 1.6), kind: "gold", n: 10 },
+      { at: pathSide(0.14, -1.3), kind: "daisy", n: 10 },
+      { at: [-4.2, 3.6], kind: "daisy", n: 13 },  // by the big left anchor
+      { at: [5.4, 3.0], kind: "gold", n: 10 },     // by the big right anchor
+      { at: [-3.2, 2.0], kind: "daisy", n: 12 },
+      { at: [2.6, -2.8], kind: "daisy", n: 12 },
+      { at: [-1.6, -5.6], kind: "gold", n: 10 },
+      { at: [-4.9, -6.0], kind: "daisy", n: 12 },  // cliff-lip rocks
+      { at: [4.8, -5.5], kind: "daisy", n: 10 },
+      { at: [-6.2, -3.4], kind: "pink", n: 7 },
+      { at: [6.6, -0.6], kind: "daisy", n: 12 },
+      { at: [0.8, 2.9], kind: "gold", n: 9 },     // right where the path crests
+      { at: [-2.1, 5.4], kind: "pink", n: 7 },
+      { at: [1.5, -6.3], kind: "daisy", n: 10 },   // crest lip, breaks horizon
+      { at: [-6.8, 1.4], kind: "gold", n: 9 },
+      { at: [3.6, 4.6], kind: "daisy", n: 10 }
     ];
     flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
       for (let i = 0; i < n; i++) {
