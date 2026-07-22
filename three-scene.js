@@ -21,7 +21,7 @@ const ThreeScene = (() => {
   // Outside cam sees it 3/4. Inside cam ends up just above the opening, looking down into it.
   const isMobile = window.innerWidth < window.innerHeight;
   const CAM = {
-    outside: { pos: [4, 2.6, 8.2], look: [0, 1.7, 0] },
+    outside: { pos: [4, 2.75, 8.2], look: [0, 1.7, 0] },
     inside: isMobile
       ? { pos: [-1.5, 2.58, 4.85], look: [0, 1.65, 0] }
       : { pos: [-0.88, 2.25, 2.80], look: [0, 1.65, 0] }
@@ -819,7 +819,10 @@ const ThreeScene = (() => {
       const [ax, az] = bez(t + 0.02);
       const dx = ax - bx, dz = az - bz;
       const dl = Math.hypot(dx, dz) || 1;
-      const side = (hash2(3.3, i) - 0.5) * 0.3;
+      // alternate left/right like a natural footstep line, plus per-stone
+      // jitter so it doesn't read as a mechanical zigzag either
+      const zigzag = (i % 2 === 0 ? 1 : -1) * 0.24;
+      const side = zigzag + (hash2(3.3, i) - 0.5) * 0.34;
       const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
       const s = 0.26 + hash2(7.7, i) * 0.16;
       stones.push({
