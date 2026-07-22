@@ -821,13 +821,14 @@ const ThreeScene = (() => {
       const dl = Math.hypot(dx, dz) || 1;
       const side = (hash2(3.3, i) - 0.5) * 0.3;
       const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
-      const s = 0.15 + hash2(7.7, i) * 0.10;
+      const s = 0.26 + hash2(7.7, i) * 0.16;
       stones.push({
         // flat worn slabs like the reference image: same puck profile but
         // squashed low and sunk in, so just a thin rounded edge shows —
-        // embedded in the dirt, not standing on it
+        // embedded in the dirt, not standing on it. Sized up from the
+        // original pavers to read as an actual step, not a decal.
         x, z, y: groundHeight(x, z) - s * 0.06,
-        sx: s, sy: s * 0.3, sz: s * (0.72 + hash2(9.1, i) * 0.45),
+        sx: s, sy: s * 0.34, sz: s * (0.72 + hash2(9.1, i) * 0.45),
         ry: hash2(5.5, i) * Math.PI * 2,
         // gray stone, a shade cooler and darker than the sandy dirt
         color: new THREE.Color().setHSL(0.08, 0.06, 0.48 + hash2(2.9, i) * 0.10)
