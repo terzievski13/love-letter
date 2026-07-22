@@ -55,7 +55,8 @@ function Envelope({ letter, idx, total, onClick, isOpen, onClose }) {
         <div style={{
           width: 240, height: 154,
           filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.4))",
-          perspective: 800
+          perspective: 800,
+          transformStyle: "preserve-3d"
         }}>
           <EnvelopeSVG letter={letter} isOpen={true} small />
         </div>
@@ -98,7 +99,8 @@ function Envelope({ letter, idx, total, onClick, isOpen, onClose }) {
         filter: clickable
           ? "drop-shadow(0 6px 12px rgba(0,0,0,0.25))"
           : "drop-shadow(0 24px 36px rgba(0,0,0,0.4))",
-        perspective: 1000
+        perspective: 1000,
+        transformStyle: "preserve-3d"
       }}
     >
       <EnvelopeSVG letter={letter} isOpen={svgIsOpen} />
@@ -116,7 +118,12 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
 
   return (
     <svg viewBox="0 0 360 230" width={w} height={h}
-         style={{ display: "block", overflow: "visible" }}>
+         style={{
+           display: "block",
+           overflow: "visible",
+           perspective: small ? 800 : 1000,
+           transformStyle: "preserve-3d"
+         }}>
       <defs>
         <linearGradient id={`env-grad-${letter.id}${small ? "s" : ""}`} x1="0" y1="0" x2="0.4" y2="1">
           <stop offset="0%" stopColor={lite} />
@@ -167,7 +174,6 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
       {/* flap — uses CSS 3D, parent has perspective */}
       <g style={{
         transformOrigin: "180px 0px",
-        transformBox: "fill-box",
         transform: isOpen ? "rotateX(165deg) translateY(-1px)" : "rotateX(0deg)",
         transition: "transform 1.0s cubic-bezier(.5,1.1,.4,1)"
       }}>
@@ -210,7 +216,7 @@ function Letter({ letter, onClose }) {
       transitionProperty: "height, opacity, transform",
       transitionDuration: "0.85s, 0.5s, 0.6s",
       transitionTimingFunction: "cubic-bezier(.5,1.1,.4,1)",
-      filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.45))"
+      boxShadow: "0 30px 60px rgba(0,0,0,0.45)"
     }}>
       {/* paper sheet */}
       <div style={{
