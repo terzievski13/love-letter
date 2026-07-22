@@ -398,7 +398,7 @@ const ThreeScene = (() => {
   // it) so the path flows in from off-screen left-of-center, like the
   // reference image
   const PATH_P0 = [0.5, 4.7], PATH_C1 = [-1.3, 3.4],
-        PATH_C2 = [0.4, 2.2], PATH_P3 = [0.4, 0.85];
+        PATH_C2 = [-0.35, 2.2], PATH_P3 = [-0.3, 0.7];
   function pathBez(t) {
     const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
     return [
@@ -422,7 +422,7 @@ const ThreeScene = (() => {
     const trail = 1 - sstep(w, w + 0.3, Math.sqrt(min2) + wob);
     // rounded dirt clearing under the mailbox itself, a bit wider than the
     // path it caps (per the reference image: the box stands on bare ground)
-    const cd = Math.hypot(x - 0.1, z - 0.3);
+    const cd = Math.hypot(x - 0.05, z - 0.35);
     const clearing = 1 - sstep(0.95, 1.3, cd + wob);
     return Math.max(trail, clearing);
   }
