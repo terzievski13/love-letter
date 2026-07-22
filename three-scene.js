@@ -397,7 +397,7 @@ const ThreeScene = (() => {
   // z≈4.0-4.3 here — found by projecting through the camera, don't eyeball
   // it) so the path flows in from off-screen left-of-center, like the
   // reference image
-  const PATH_P0 = [0.5, 4.7], PATH_C1 = [-1.3, 3.4],
+  const PATH_P0 = [0.5, 4.7], PATH_C1 = [-1.75, 3.4],
         PATH_C2 = [-0.35, 2.2], PATH_P3 = [-0.3, 0.7];
   function pathBez(t) {
     const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
@@ -417,13 +417,13 @@ const ThreeScene = (() => {
     // wide worn-earth band (per the user's sketch): the dirt itself reads
     // as the path again, stones sit on top of it, with an organic
     // noise-wobbled edge instead of a ruler line
-    const w = 0.5 + 0.3 * sstep(0.5, 7, z);
+    const w = 0.62 + 0.26 * sstep(0.5, 7, z);
     const wob = (fbm2(x * 1.1 + 5.5, z * 1.1 + 2.2, 2) - 0.5) * 0.22;
     const trail = 1 - sstep(w, w + 0.3, Math.sqrt(min2) + wob);
     // rounded dirt clearing under the mailbox itself, a bit wider than the
     // path it caps (per the reference image: the box stands on bare ground)
     const cd = Math.hypot(x - 0.05, z - 0.35);
-    const clearing = 1 - sstep(0.95, 1.3, cd + wob);
+    const clearing = 1 - sstep(0.82, 1.15, cd + wob);
     return Math.max(trail, clearing);
   }
 
