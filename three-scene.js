@@ -27,6 +27,12 @@ const ThreeScene = (() => {
       : { pos: [-0.88, 2.25, 2.80], look: [0, 1.65, 0] }
   };
 
+  // Two bird flock behaviors to compare — flip this constant to preview
+  // the other one, then reload. "lighthouse": a small flock orbits the
+  // lighthouse islet. "sky": a small flock wanders the mid-sky in front of
+  // the mountains, biased to stay near the default outside-camera framing.
+  const BIRD_MODE = "lighthouse"; // "lighthouse" | "sky"
+
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
   let currentLook = new THREE.Vector3(0, 1.6, 0);
 
@@ -74,6 +80,7 @@ const ThreeScene = (() => {
     buildScatter();
     buildLighthouse();
     buildSailboat();
+    buildBirds(BIRD_MODE);
     buildMailbox();
     buildLights();
 
@@ -1090,6 +1097,122 @@ const ThreeScene = (() => {
       boat.position.x = -45 + ((t * 0.3125) % 75);
       boat.rotation.z = Math.sin(t * 0.8) * 0.03;
       boat.position.y = -0.16 + Math.sin(t * 0.55) * 0.015;
+    });
+  }
+
+  // A flat dark wing silhouette — this is how real distant birds actually
+  // read against a sky (no visible feather/body detail, just the moving
+  // shape), so it's both the cheapest option and the most convincing one.
+  // Two of these mirrored + a sliver body make one bird; wings hinge at
+  // the root for the flap.
+  function makeBirdWingGeometry(span, sweep, chord) {
+    const geo = new THREE.BufferGeometry();
+    const verts = new Float32Array([
+      0, 0, 0,
+      span, -sweep * 0.15, -sweep,
+      span * 0.32, 0, chord
+    ]);
+    geo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildBirds(mode) {
+    /* Small flock (5 birds), one of two behaviors picked by BIRD_MODE:
+       "lighthouse" orbits the islet, "sky" wanders the mid-sky in front
+       of the mountains. Local +Z is each bird's nose direction — heading
+       is derived each frame from its own flight-path formula (sampled a
+       moment apart) so orientation always matches actual travel, no
+       separate steering logic to keep in sync. */
+    const wingGeo = makeBirdWingGeometry(0.34, 0.07, 0.13);
+    const bodyGeo = new THREE.ConeGeometry(0.02, 0.18, 6);
+    bodyGeo.rotateX(Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x2a1c14, side: THREE.DoubleSide, fog: true });
+
+    const N = 5;
+    const birds = [];
+    for (let i = 0; i < N; i++) {
+      const group = new THREE.Group();
+      const lPivot = new THREE.Group();
+      lPivot.add(new THREE.Mesh(wingGeo, mat));
+      const rPivot = new THREE.Group();
+      const rWing = new THREE.Mesh(wingGeo, mat);
+      rWing.scale.x = -1;
+      rPivot.add(rWing);
+      group.add(lPivot, rPivot, new THREE.Mesh(bodyGeo, mat));
+      group.scale.setScalar(1.5 + hash2(61.1, i) * 0.8); // wingspan variety
+      scene.add(group);
+      birds.push({
+        group, lPivot, rPivot,
+        flapPhase: hash2(62.3, i) * 10,
+        bobPhase: hash2(63.9, i) * 10,
+        // mode-specific flight params
+        radius: 3.2 + hash2(64.1, i) * 2.4,
+        altitude: mode === "lighthouse" ? 5.5 + hash2(65.3, i) * 2.0 : 6.5 + hash2(65.3, i) * 2.5,
+        angSpeed: (0.09 + hash2(66.7, i) * 0.05) * (i % 2 === 0 ? 1 : -1),
+        angPhase: hash2(67.1, i) * Math.PI * 2,
+        bobAmp: 0.25 + hash2(68.3, i) * 0.2,
+        // "sky" wander params: a slow main loop plus a faster smaller
+        // loop layered on top, so the path is denser near the centre but
+        // still ranges out wide over its cycle instead of sitting still
+        wx: -3 + hash2(69.1, i) * 2, wz: -24 + hash2(70.3, i) * 6, wy: 7 + hash2(71.7, i),
+        wSpeed: 0.05 + hash2(72.9, i) * 0.02,
+        wPhase: hash2(73.3, i) * Math.PI * 2,
+        wRangeX: 7 + hash2(74.1, i) * 3, wRangeZ: 10 + hash2(75.3, i) * 4,
+        driftSpeed: 0.13 + hash2(76.7, i) * 0.05,
+        driftPhase: hash2(77.9, i) * Math.PI * 2
+      });
+    }
+
+    function positionAt(b, t) {
+      if (mode === "lighthouse") {
+        const ang = t * b.angSpeed + b.angPhase;
+        return [
+          1.5 + Math.cos(ang) * b.radius,
+          b.altitude + Math.sin(t * 0.5 + b.bobPhase) * b.bobAmp,
+          -52 + Math.sin(ang) * b.radius
+        ];
+      }
+      // "sky": Lissajous-style wander — slow big loop (wSpeed) biased around
+      // (wx, wz), with a faster smaller loop (driftSpeed) layered in so the
+      // path isn't a clean ellipse and ranges further out sometimes.
+      const a = t * b.wSpeed + b.wPhase;
+      const d = t * b.driftSpeed + b.driftPhase;
+      return [
+        b.wx + Math.sin(a) * b.wRangeX + Math.sin(d * 1.7) * b.wRangeX * 0.35,
+        b.wy + Math.sin(t * 0.3 + b.bobPhase) * 1.1,
+        b.wz + Math.cos(a * 0.8) * b.wRangeZ + Math.cos(d) * b.wRangeZ * 0.3
+      ];
+    }
+
+    const DT = 0.08;
+    tickers.push((t) => {
+      birds.forEach((b) => {
+        const p0 = positionAt(b, t);
+        const p1 = positionAt(b, t + DT);
+        const p2 = positionAt(b, t + DT * 2);
+        b.group.position.set(p0[0], p0[1], p0[2]);
+
+        const h0 = Math.atan2(p1[0] - p0[0], p1[2] - p0[2]);
+        const h1 = Math.atan2(p2[0] - p1[0], p2[2] - p1[2]);
+        b.group.rotation.y = h0;
+
+        const speed = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) / DT || 0.001;
+        b.group.rotation.x = -Math.atan2((p1[1] - p0[1]) / DT, speed) * 0.6;
+
+        let dHeading = h1 - h0;
+        dHeading = ((dHeading + Math.PI) % (Math.PI * 2)) - Math.PI;
+        b.group.rotation.z = Math.max(-0.5, Math.min(0.5, (dHeading / DT) * 0.3));
+
+        // flap-burst-then-glide, not a nonstop flap — reads far more like
+        // a real bird coasting between wingbeats
+        const cycle = 2.4, flapDur = 1.0;
+        const localT = (t + b.flapPhase) % cycle;
+        const env = localT < flapDur ? Math.sin((localT / flapDur) * Math.PI) : 0;
+        const flap = env * 0.85 * Math.sin(t * 10 + b.flapPhase * 3);
+        b.lPivot.rotation.z = flap;
+        b.rPivot.rotation.z = -flap;
+      });
     });
   }
 
