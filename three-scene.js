@@ -390,7 +390,7 @@ const ThreeScene = (() => {
   // 1 on the dirt path, 0 off it. Distance to a quadratic bezier from the
   // bottom-right of the outside camera's frame to the mailbox base — sampled,
   // which is plenty accurate for coloring and stone placement.
-  const PATH_P0 = [2.7, 6.8], PATH_P1 = [2.4, 3.0], PATH_P2 = [0.4, 0.85];
+  const PATH_P0 = [-1.4, 4.2], PATH_P1 = [0.85, 2.3], PATH_P2 = [0.4, 0.85];
   function pathMask(x, z) {
     let min2 = Infinity;
     for (let i = 0; i <= 24; i++) {
@@ -401,9 +401,10 @@ const ThreeScene = (() => {
       const d2 = dx * dx + dz * dz;
       if (d2 < min2) min2 = d2;
     }
-    // wide like the concept board: broadens toward the viewer, organic
+    // wide worn-earth band (per the user's sketch): the dirt itself reads
+    // as the path again, stones sit on top of it, with an organic
     // noise-wobbled edge instead of a ruler line
-    const w = 0.5 + 0.35 * sstep(0.5, 7, z);
+    const w = 0.5 + 0.3 * sstep(0.5, 7, z);
     const wob = (fbm2(x * 1.1 + 5.5, z * 1.1 + 2.2, 2) - 0.5) * 0.22;
     return 1 - sstep(w, w + 0.3, Math.sqrt(min2) + wob);
   }
@@ -446,7 +447,7 @@ const ThreeScene = (() => {
         }
 
         // dirt path — only bother inside its bounding box
-        if (x > -1.6 && x < 5.2 && z > -0.6 && z < 8.4) {
+        if (x > -3.4 && x < 5.2 && z > -0.6 && z < 8.4) {
           const pm = pathMask(x, z);
           if (pm > 0) {
             dirt.copy(dirtA).lerp(dirtB, fbm2(x / 2.4 + 31.1, z / 2.4 + 5.5, 2));
@@ -654,6 +655,37 @@ const ThreeScene = (() => {
     return geo;
   }
 
+  // A puck-like stepping stone: flat top, a clear vertical side wall, and a
+  // chamfered top edge — same lathe-a-profile trick as makeBellGeometry.
+  // Jitter is x/z only and depends only on x/z, so every vertex on the same
+  // vertical line moves together and the wall stays a true vertical cut.
+  function makeStoneGeometry() {
+    const profile = [
+      [0.00, 0.00], // center bottom
+      [0.97, 0.00], // flat bottom out to near full radius
+      [1.00, 0.10], // tiny bottom bevel
+      [1.00, 0.68], // vertical wall — the "clear vertical cut"
+      [0.85, 0.92], // top chamfer inward — the "little sharp edge"
+      [0.00, 0.92]  // flat top cap
+    ].map(([rf, hf]) => new THREE.Vector2(rf, hf));
+    let geo = new THREE.LatheGeometry(profile, 11);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const r = Math.hypot(x, z);
+      if (r < 1e-6) continue;
+      // modest ±12% — enough to break the perfect circle, small enough
+      // that the puck silhouette survives (boulders use ±30-50%)
+      const j = 1 + (fbm2(x * 1.4 + 3.7, z * 1.4 + 8.1, 2) - 0.5) * 0.24;
+      pos.setXYZ(i, x * j, y, z * j);
+    }
+    // de-index so the chamfer shades as separate facets — shared-vertex
+    // smooth normals would melt the sharp edge right back off
+    geo = geo.toNonIndexed();
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   function buildScatter() {
     /* Foreground dressing: stepping stones on the path, boulders at the
        cliff lip, wildflowers, chunky grass tufts. One InstancedMesh per
@@ -711,7 +743,7 @@ const ThreeScene = (() => {
       [-5.0, 4.6, [0.72, 0, 0], [0.34, 0.85, 0.5], [0.20, -0.66, 0.42]],  // big left anchor
       [6.1, 3.9, [0.58, 0, 0], [0.28, -0.64, 0.3]],                       // big right anchor
       [1.9, 4.8, [0.28, 0, 0], [0.15, 0.42, 0.22]],                       // path right
-      [-0.7, 3.3, [0.24, 0, 0], [0.13, -0.34, 0.18]],                     // path left
+      [-2.4, 2.7, [0.24, 0, 0], [0.13, -0.34, 0.18]],                     // path left (moved off the widened path)
       [3.3, 1.8, [0.20, 0, 0]],                                           // near the crest
       [-3.9, 0.8, [0.38, 0, 0], [0.19, 0.5, 0.3]],                        // left flank
       [-5.6, -6.9, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
@@ -742,6 +774,57 @@ const ThreeScene = (() => {
     // flower placement below)
     const insideRock = (x, z) =>
       rocks.some((r) => Math.hypot(x - r.x, z - r.z) < r.sx * 1.15);
+
+    // ---------- stepping stones: raised faceted pucks along the path ----------
+    // flat top, vertical side wall, chamfered edge (makeStoneGeometry above),
+    // standing proud of the grass instead of melting into it
+    const stoneGeo = makeStoneGeometry();
+    // arc-length lookup so stones space evenly along the bezier — uniform t
+    // bunches them near the ends once the curve bows this much
+    const AL_N = 60, alLens = [0];
+    {
+      let pv = bez(0);
+      for (let i = 1; i <= AL_N; i++) {
+        const p = bez(i / AL_N);
+        alLens.push(alLens[i - 1] + Math.hypot(p[0] - pv[0], p[1] - pv[1]));
+        pv = p;
+      }
+    }
+    const tAtFraction = (f) => {
+      const target = f * alLens[AL_N];
+      let i = 1;
+      while (i < AL_N && alLens[i] < target) i++;
+      const k = (target - alLens[i - 1]) / (alLens[i] - alLens[i - 1] || 1);
+      return (i - 1 + k) / AL_N;
+    };
+    const stones = [];
+    const STONE_N = 7;
+    for (let i = 0; i < STONE_N; i++) {
+      const t = tAtFraction(0.10 + i * (0.80 / (STONE_N - 1)));
+      const [bx, bz] = bez(t);
+      const [ax, az] = bez(t + 0.02);
+      const dx = ax - bx, dz = az - bz;
+      const dl = Math.hypot(dx, dz) || 1;
+      const side = (hash2(3.3, i) - 0.5) * 0.24;
+      const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
+      const s = 0.17 + hash2(7.7, i) * 0.05;
+      stones.push({
+        // lathe base sits at y=0, so sink the bottom bevel into the dirt
+        x, z, y: groundHeight(x, z) - s * 0.1,
+        sx: s, sy: s * 0.6, sz: s * (0.88 + hash2(9.1, i) * 0.24),
+        ry: hash2(5.5, i) * Math.PI * 2,
+        // sandy tones close to the dirt, so pads read as part of the path
+        color: new THREE.Color().setHSL(0.09, 0.13, 0.56 + hash2(2.9, i) * 0.08)
+      });
+    }
+    const stoneMesh = place(new THREE.InstancedMesh(
+      stoneGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
+    stoneMesh.receiveShadow = true;
+    stoneMesh.castShadow = true; // raised pucks need contact shadows or they float
+
+    // nothing may grow on top of a stone either
+    const insideStone = (x, z) =>
+      stones.some((st) => Math.hypot(x - st.x, z - st.z) < st.sx * 1.15);
 
     // ---------- flowers: daisy drifts + buttercups + pink spikes ----------
     // daisy/buttercup heads are real merged petal geometry, pink florets
@@ -775,7 +858,7 @@ const ThreeScene = (() => {
         const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
         const rad = 0.08 + Math.sqrt(hash2(pi * 7.9, i * 5.7)) * 0.6;
         const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
-        if (pathMask(x, z) > 0.3 || terrainDrop(x, z) > 0.08 || Math.hypot(x, z) < 0.8 || insideRock(x, z)) continue;
+        if (pathMask(x, z) > 0.3 || terrainDrop(x, z) > 0.08 || Math.hypot(x, z) < 0.8 || insideRock(x, z) || insideStone(x, z)) continue;
         const y = groundHeight(x, z);
         const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.55;
         const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
@@ -1360,9 +1443,16 @@ const ThreeScene = (() => {
     scene.add(ambient);
 
     // key stays roughly where the mailbox was tuned for — only nudged a
-    // touch toward the back for a hint of the sunset backlight
+    // touch toward the back for a hint of the sunset backlight. Position is
+    // 2x the original (5,3,-2) direction, pushed straight back along the
+    // same ray: a DirectionalLight's illumination only depends on direction,
+    // not distance, so this doesn't change how anything is lit — it only
+    // gives the shadow camera's near plane (0.5) room to clear the cliff-lip
+    // rock clusters near (5.3,-6.3) and (7.0,-1.5), which otherwise sit
+    // behind/at the near plane (their light-space depth was ~0, some even
+    // negative) and silently dropped out of the shadow map entirely.
     const sun = new THREE.DirectionalLight(0xffd6a0, 1.6);
-    sun.position.set(5, 3, -2);
+    sun.position.set(10, 6, -4);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -10;
@@ -1371,7 +1461,12 @@ const ThreeScene = (() => {
     sun.shadow.camera.bottom = -10;
     sun.shadow.camera.near = 0.5;
     sun.shadow.camera.far = 30;
-    sun.shadow.bias = -0.0005;
+    // Old bias:-0.0005 alone caused a visible gap between rocks and their
+    // shadows (peter-panning). Tested bias/normalBias down to 0 across every
+    // rock and the mailbox dome at high contrast — no shadow acne appears at
+    // this light angle, so there's no need for either offset.
+    sun.shadow.bias = 0;
+    sun.shadow.normalBias = 0;
     scene.add(sun);
 
     // warm rim light — faked sun-side rim, slightly stronger now that the

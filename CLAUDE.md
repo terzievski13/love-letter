@@ -110,8 +110,20 @@ untouched. What the scene is now:
   Knoll: the land dips ~0.5 away from the y=0 plateau (the plateau
   itself can never move) so the mailbox crests a hill — this is why the
   SEA sits at y=−0.22 (dipped lawn clamped at −0.14 must never flood;
-  ripple overlays/streak/boat heights all moved with it). Wide sandy
-  path with pebble speckle, NO stepping stones. Gray rocks in nestled
+  ripple overlays/streak/boat heights all moved with it). Path (matched
+  to the user's hand-annotated sketch, July 2026): a WIDE worn-dirt band
+  (`pathMask`, w ≈ 0.5–0.8) sweeping a clear bezier arc from bottom-left
+  up to the mailbox (`PATH_P0/P1/P2`; P1 well off the chord is what makes
+  the bow), with raised puck stepping stones on top — flat top, vertical
+  side wall, chamfered edge (`makeStoneGeometry`, a lathe profile
+  de-indexed for faceted shading; x/z-only jitter keeps the wall a true
+  vertical cut). Stones are arc-length spaced along the curve
+  (`tAtFraction` in `buildScatter`) so they don't bunch near either end,
+  and they cast shadows (they stand proud of the grass now). This
+  replaced two earlier looks in turn: "no stones, wide sandy path", then
+  "narrow trail + flat melted-in sphere pads". The small "path left"
+  rock cluster was moved to (−2.4, 2.7) to clear the widened path.
+  Gray rocks in nestled
   clusters (big anchors at bottom frame corners). NO grass — removed
   entirely (was a real 3D tuft model, grass-tuft.glb; several
   iterations — card billboards, then the tuft model, brightness/contrast
