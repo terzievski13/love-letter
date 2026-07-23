@@ -1327,34 +1327,94 @@ const ThreeScene = (() => {
     });
   }
 
+  // A flat triangle (or fan of triangles, for a gently bowed sail) built
+  // from an explicit vertex list — used for both sails and the pennant.
+  function makeFlatShape(points) {
+    const geo = new THREE.BufferGeometry();
+    const verts = [];
+    points.forEach(([x, y, z]) => verts.push(x, y, z || 0));
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    const idx = [];
+    for (let i = 1; i < points.length - 1; i++) idx.push(0, i, i + 1);
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   function buildSailboat() {
-    // Tiny boat drifting across the bay at z≈−55. Unlit warm colors so fog
-    // blends it predictably; bob + drift ticked from updateLandscape.
+    // Tiny sloop drifting across the bay at z≈−55. Unlit warm colors so fog
+    // blends it predictably; bob + drift ticked from updateLandscape. Local
+    // space: X = length (bow at +X, transom at −X), Y = up, Z = beam.
     const boat = new THREE.Group();
-    const hull = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.32, 0.32, 1.5, 12, 1, false, Math.PI, Math.PI),
-      new THREE.MeshBasicMaterial({ color: 0x4a3226, fog: true })
-    );
-    hull.rotation.z = Math.PI / 2; // half-cylinder opening up = hull shell
-    hull.scale.set(1, 1, 0.55);
+
+    // Hull: an explicit side-profile (pointed rising bow, flat transom
+    // stern, shallow keel belly) extruded across the beam — reads as an
+    // actual boat silhouette instead of the old plain half-cylinder tube.
+    const hullShape = new THREE.Shape();
+    const hullPts = [
+      [-0.72, 0.06], [-0.72, 0.30], [-0.30, 0.36], [0.35, 0.33],
+      [0.78, 0.10], [0.45, -0.05], [-0.10, -0.13]
+    ];
+    hullShape.moveTo(hullPts[0][0], hullPts[0][1]);
+    for (let i = 1; i < hullPts.length; i++) hullShape.lineTo(hullPts[i][0], hullPts[i][1]);
+    hullShape.closePath();
+    const hullGeo = new THREE.ExtrudeGeometry(hullShape, { depth: 0.42, bevelEnabled: false });
+    hullGeo.translate(0, 0, -0.21); // center the beam on the boat's centerline
+    const hull = new THREE.Mesh(hullGeo, new THREE.MeshBasicMaterial({ color: 0x4a3226, fog: true }));
     boat.add(hull);
-    const mast = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.025, 0.025, 1.5, 5),
+
+    // tiny bowsprit — a real sloop detail, and gives the jib's forestay
+    // somewhere to attach in front of the bow instead of at it
+    const bowsprit = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.016, 0.32, 5),
       new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
     );
-    mast.position.y = 0.75;
-    boat.add(mast);
-    // a sail genuinely is a plane — one triangle
-    const sailGeo = new THREE.BufferGeometry();
-    sailGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
-      0.05, 0.25, 0, 0.05, 1.45, 0, 0.85, 0.35, 0
-    ]), 3));
-    sailGeo.computeVertexNormals();
-    const sail = new THREE.Mesh(
-      sailGeo,
-      new THREE.MeshBasicMaterial({ color: 0xfff2e0, side: THREE.DoubleSide, fog: true })
+    bowsprit.rotation.z = Math.PI / 2;
+    bowsprit.position.set(0.9, 0.24, 0);
+    boat.add(bowsprit);
+
+    const MAST_X = 0.05, DECK_Y = 0.32, MAST_H = 1.35;
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.028, MAST_H, 6),
+      new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
     );
-    boat.add(sail);
+    mast.position.set(MAST_X, DECK_Y + MAST_H / 2, 0);
+    boat.add(mast);
+
+    const boom = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.014, 0.72, 5),
+      new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
+    );
+    boom.rotation.z = Math.PI / 2;
+    boom.position.set(MAST_X + 0.36, DECK_Y, 0);
+    boat.add(boom);
+
+    const sailMat = new THREE.MeshBasicMaterial({ color: 0xfff2e0, side: THREE.DoubleSide, fog: true });
+    // mainsail, aft of the mast — four points instead of a plain triangle so
+    // the leech bows out a touch, reading as cloth instead of a rigid card
+    const mainsail = new THREE.Mesh(makeFlatShape([
+      [MAST_X, DECK_Y, 0],
+      [MAST_X, DECK_Y + MAST_H - 0.06, 0],
+      [MAST_X + 0.5, DECK_Y + 0.55, 0.04],
+      [MAST_X + 0.74, DECK_Y, 0]
+    ]), sailMat);
+    boat.add(mainsail);
+    // jib, forward of the mast — smaller, forestayed from the bowsprit tip
+    // up to partway up the mast, the classic sloop silhouette
+    const jib = new THREE.Mesh(makeFlatShape([
+      [1.05, DECK_Y - 0.06, 0],
+      [MAST_X, DECK_Y + MAST_H * 0.72, 0],
+      [MAST_X + 0.2, DECK_Y, 0]
+    ]), new THREE.MeshBasicMaterial({ color: 0xf3e6cc, side: THREE.DoubleSide, fog: true }));
+    boat.add(jib);
+    // masthead pennant — small warm-red accent, echoes the mailbox
+    const pennant = new THREE.Mesh(makeFlatShape([
+      [MAST_X, DECK_Y + MAST_H, 0],
+      [MAST_X, DECK_Y + MAST_H - 0.08, 0],
+      [MAST_X + 0.16, DECK_Y + MAST_H - 0.04, 0]
+    ]), new THREE.MeshBasicMaterial({ color: 0xa5443a, side: THREE.DoubleSide, fog: true }));
+    boat.add(pennant);
+
     boat.position.set(-30, -0.16, -55);
     boat.rotation.y = Math.PI * 0.08;
     scene.add(boat);
