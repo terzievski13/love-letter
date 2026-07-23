@@ -65,7 +65,7 @@ const ThreeScene = (() => {
     scene.background = new THREE.Color(0xeebA90);
     scene.fog = new THREE.Fog(0xeeb890, 30, 175);
 
-    camera = new THREE.PerspectiveCamera(70, initW / initH, 0.1, 200);
+    camera = new THREE.PerspectiveCamera(55, initW / initH, 0.1, 200);
     camera.position.set(...CAM.outside.pos);
     camera.lookAt(...CAM.outside.look);
 
@@ -1100,17 +1100,23 @@ const ThreeScene = (() => {
     });
   }
 
-  // A flat dark wing silhouette — this is how real distant birds actually
-  // read against a sky (no visible feather/body detail, just the moving
-  // shape), so it's both the cheapest option and the most convincing one.
+  // A flat wing silhouette — this is how real distant birds actually read
+  // against a sky (no visible feather/body detail, just the moving shape).
+  // Rounded 5-point fan (root + 4 rim points) instead of a single sharp
+  // triangle — a bare acute blade read too much like a bat wing.
   // Two of these mirrored + a sliver body make one bird; wings hinge at
   // the root for the flap.
   function makeBirdWingGeometry(span, sweep, chord) {
     const geo = new THREE.BufferGeometry();
+    const root = [0, 0, 0];
+    const p1 = [span * 0.55, -sweep * 0.25, -sweep * 0.55]; // leading bulge
+    const p2 = [span, -sweep * 0.4, -sweep * 0.15];          // rounded tip
+    const p3 = [span * 0.62, 0, chord * 0.9];                // trailing bulge
+    const p4 = [span * 0.18, 0, chord * 0.5];                // soft inner corner
     const verts = new Float32Array([
-      0, 0, 0,
-      span, -sweep * 0.15, -sweep,
-      span * 0.32, 0, chord
+      ...root, ...p1, ...p2,
+      ...root, ...p2, ...p3,
+      ...root, ...p3, ...p4
     ]);
     geo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
     geo.computeVertexNormals();
@@ -1127,7 +1133,9 @@ const ThreeScene = (() => {
     const wingGeo = makeBirdWingGeometry(0.34, 0.07, 0.13);
     const bodyGeo = new THREE.ConeGeometry(0.02, 0.18, 6);
     bodyGeo.rotateX(Math.PI / 2);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x2a1c14, side: THREE.DoubleSide, fog: true });
+    // bright warm blush — reads clearly against the sunset instead of a
+    // stark black bat silhouette
+    const mat = new THREE.MeshBasicMaterial({ color: 0xf6d0da, side: THREE.DoubleSide, fog: true });
 
     const N = 5;
     const birds = [];
@@ -1142,20 +1150,24 @@ const ThreeScene = (() => {
       group.add(lPivot, rPivot, new THREE.Mesh(bodyGeo, mat));
       group.scale.setScalar(1.5 + hash2(61.1, i) * 0.8); // wingspan variety
       scene.add(group);
+      // evenly spread starting angle/phase around the circle (plus a little
+      // jitter) instead of pure random, so 5 birds can't clump by chance —
+      // that's what read as a tight swarm instead of a loose flock
+      const evenPhase = (i / N) * Math.PI * 2;
       birds.push({
         group, lPivot, rPivot,
         flapPhase: hash2(62.3, i) * 10,
         bobPhase: hash2(63.9, i) * 10,
-        // mode-specific flight params
-        radius: 3.2 + hash2(64.1, i) * 2.4,
-        altitude: mode === "lighthouse" ? 5.5 + hash2(65.3, i) * 2.0 : 6.5 + hash2(65.3, i) * 2.5,
-        angSpeed: (0.09 + hash2(66.7, i) * 0.05) * (i % 2 === 0 ? 1 : -1),
-        angPhase: hash2(67.1, i) * Math.PI * 2,
+        // mode-specific flight params — wider orbit, looser spread per bird
+        radius: 6.5 + hash2(64.1, i) * 3.5,
+        altitude: mode === "lighthouse" ? 5 + hash2(65.3, i) * 4.0 : 6.5 + hash2(65.3, i) * 2.5,
+        angSpeed: (0.07 + hash2(66.7, i) * 0.04) * (i % 2 === 0 ? 1 : -1),
+        angPhase: evenPhase + (hash2(67.1, i) - 0.5) * 0.8,
         bobAmp: 0.25 + hash2(68.3, i) * 0.2,
         // "sky" wander params: a slow main loop plus a faster smaller
         // loop layered on top, so the path is denser near the centre but
         // still ranges out wide over its cycle instead of sitting still
-        wx: -3 + hash2(69.1, i) * 2, wz: -24 + hash2(70.3, i) * 6, wy: 7 + hash2(71.7, i),
+        wx: -6 + hash2(69.1, i) * 8, wz: -30 + hash2(70.3, i) * 16, wy: 7 + hash2(71.7, i),
         wSpeed: 0.05 + hash2(72.9, i) * 0.02,
         wPhase: hash2(73.3, i) * Math.PI * 2,
         wRangeX: 7 + hash2(74.1, i) * 3, wRangeZ: 10 + hash2(75.3, i) * 4,
