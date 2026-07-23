@@ -39,7 +39,7 @@ const ThreeScene = (() => {
   // edges, like sunset light grazing the feathers. "billboard": a 2D
   // camera-facing sprite instead of 3D wing meshes, the way a lot of games
   // actually do background birds.
-  const BIRD_STYLE = "dark"; // "dark" | "rimlit" | "billboard"
+  const BIRD_STYLE = "billboard"; // "dark" | "rimlit" | "billboard"
 
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
   let currentLook = new THREE.Vector3(0, 1.6, 0);
@@ -1155,13 +1155,23 @@ const ThreeScene = (() => {
   // of built from 3D wing meshes. This is how a lot of games actually do
   // background birds — always reads correctly regardless of view angle,
   // and is one draw call per bird instead of three.
-  function makeBirdSpriteTexture(color) {
+  // 6-frame flipbook covering a full wingbeat (frame 0 is the glide/hold
+  // pose used between flap bursts). Painted in flat white so it can be
+  // tinted per bird via SpriteMaterial.color — same trick this file
+  // already uses for clouds (one grayscale texture, N tints) instead of
+  // baking one color into the texture.
+  const BIRD_FRAMES = 6;
+  function makeBirdSpriteSheet() {
     const c = document.createElement("canvas");
-    c.width = 128; c.height = 64;
+    c.width = 64 * BIRD_FRAMES; c.height = 64;
     const ctx = c.getContext("2d");
-    function drawFrame(ox, droop) {
-      const cx = ox + 32, cy = 34, span = 27;
-      ctx.fillStyle = color;
+    // droop per frame: how far the wingtips sit above the shoulder line
+    // (canvas y shrinks upward) — glide, then a push-down power stroke,
+    // rising back through flat, up to a raised recovery peak, descending
+    const droops = [4, -5, 3, 14, 24, 14];
+    droops.forEach((droop, i) => {
+      const cx = i * 64 + 32, cy = 34, span = 27;
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath();
       ctx.moveTo(cx, cy - 2);
       ctx.quadraticCurveTo(cx - span * 0.5, cy - droop * 0.5 - 4, cx - span, cy - droop - 4);
@@ -1172,12 +1182,10 @@ const ThreeScene = (() => {
       ctx.quadraticCurveTo(cx + span * 0.5, cy - droop * 0.5 - 4, cx, cy - 2);
       ctx.closePath();
       ctx.fill();
-    }
-    drawFrame(0, 4);    // glide: wings nearly flat
-    drawFrame(64, 20);  // flap: wings raised
+    });
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.repeat.set(0.5, 1);
+    tex.repeat.set(1 / BIRD_FRAMES, 1);
     return tex;
   }
 
@@ -1200,7 +1208,7 @@ const ThreeScene = (() => {
     const mat = style === "rimlit"
       ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true })
       : new THREE.MeshBasicMaterial({ color: DARK, side: THREE.DoubleSide, fog: true });
-    const spriteTex = style === "billboard" ? makeBirdSpriteTexture("#352a24") : null;
+    const spriteTex = style === "billboard" ? makeBirdSpriteSheet() : null;
 
     const N = 5;
     const birds = [];
@@ -1208,7 +1216,14 @@ const ThreeScene = (() => {
       const scale = 1.5 + hash2(61.1, i) * 0.8; // wingspan variety
       let obj, lPivot = null, rPivot = null;
       if (style === "billboard") {
-        obj = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex, transparent: true, depthWrite: false, fog: true }));
+        // one shared grayscale texture, tinted per bird (same trick as the
+        // sky's cloud sprites) — a little hue/lightness jitter so the flock
+        // isn't five identical stamped copies
+        const tint = new THREE.Color(DARK);
+        const hsl = { h: 0, s: 0, l: 0 };
+        tint.getHSL(hsl);
+        tint.setHSL(hsl.h + (hash2(78.1, i) - 0.5) * 0.04, hsl.s, hsl.l + (hash2(79.3, i) - 0.5) * 0.08);
+        obj = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex, color: tint, transparent: true, depthWrite: false, fog: true }));
         obj.scale.set(scale * 1.1, scale * 0.55, 1);
       } else {
         obj = new THREE.Group();
@@ -1299,10 +1314,14 @@ const ThreeScene = (() => {
           b.rPivot.rotation.z = -flap;
         } else {
           // billboard sprite: always faces the camera, so "heading" can't
-          // be shown — bank is approximated as a 2D in-image rotation, and
-          // the flap is a frame swap instead of a hinge rotation
+          // be shown — bank is approximated as a 2D in-image rotation.
+          // Flap is a 6-frame flipbook cycle instead of a hinge rotation:
+          // frame 0 is the glide/hold pose, frames 1-5 step through one
+          // wingbeat while a burst is active.
           b.obj.material.rotation = bank;
-          b.obj.material.map.offset.x = env > 0.5 ? 0.5 : 0;
+          const beatPhase = (t * 10 + b.flapPhase * 3) / (Math.PI * 2);
+          const frame = env > 0.05 ? 1 + Math.floor(((beatPhase % 1) + 1) % 1 * (BIRD_FRAMES - 1)) : 0;
+          b.obj.material.map.offset.x = frame / BIRD_FRAMES;
         }
       });
     });
