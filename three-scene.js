@@ -27,20 +27,6 @@ const ThreeScene = (() => {
       : { pos: [-0.88, 2.25, 2.80], look: [0, 1.65, 0] }
   };
 
-  // Two bird flock behaviors to compare — flip this constant to preview
-  // the other one, then reload. "lighthouse": a small flock orbits the
-  // lighthouse islet. "sky": a small flock wanders the mid-sky in front of
-  // the mountains, biased to stay near the default outside-camera framing.
-  const BIRD_MODE = "lighthouse"; // "lighthouse" | "sky"
-  // Three visual styles to compare — flip this constant too, then reload.
-  // "dark": flat warm-dark silhouette (the physically correct look — distant
-  // birds read dark even when not actually dark, because they're backlit).
-  // "rimlit": same shape, dark body fading to a warm gold rim at the wing
-  // edges, like sunset light grazing the feathers. "billboard": a 2D
-  // camera-facing sprite instead of 3D wing meshes, the way a lot of games
-  // actually do background birds.
-  const BIRD_STYLE = "billboard"; // "dark" | "rimlit" | "billboard"
-
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
   let currentLook = new THREE.Vector3(0, 1.6, 0);
 
@@ -50,6 +36,11 @@ const ThreeScene = (() => {
   function updateLandscape(t) {
     for (let i = 0; i < tickers.length; i++) tickers[i](t);
   }
+
+  // Wind-sway shader time — every swaying material shares one clock so
+  // stems and the heads sitting on them stay in phase with each other.
+  const windUniforms = [];
+  tickers.push((t) => { windUniforms.forEach((u) => { u.value = t; }); });
 
   // door rotation
   let doorTarget = 0;
@@ -88,7 +79,6 @@ const ThreeScene = (() => {
     buildScatter();
     buildLighthouse();
     buildSailboat();
-    buildBirds(BIRD_MODE, BIRD_STYLE);
     buildMailbox();
     buildLights();
 
@@ -366,6 +356,45 @@ const ThreeScene = (() => {
   function sstep(e0, e1, x) {
     const t = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
     return t * t * (3 - 2 * t);
+  }
+
+  /* Wind sway: patches an existing lit material's vertex shader (instead
+     of replacing it with a bare ShaderMaterial) so instances keep their
+     normal Lambert lighting/shadows and just gain a gentle side-to-side
+     bend. Two modes:
+       "stem"   — geometry rooted at local y=0 (see stemGeo.translate).
+                  Displacement grows with local y, so the base stays
+                  planted and the tip sways most, like a real stalk.
+       "head"   — flower heads/centers/florets are small blobs centered
+                  near their own origin, not rooted at y=0, so they sway
+                  as a rigid whole (pinnedHeight approximates how far up
+                  the stem they sit) to stay glued to the stem tip below
+                  them instead of drifting independently.
+     Every instance gets its own phase from its instance position (baked
+     into instanceMatrix by `place()`), so the whole drift doesn't wave
+     in unison — it ripples across the cluster like real wind gusts do. */
+  function addWindSway(material, { mode = "stem", strength = 0.5, pinnedHeight = 0.1 } = {}) {
+    const uniform = { value: 0 };
+    windUniforms.push(uniform);
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uWindTime = uniform;
+      shader.vertexShader =
+        "uniform float uWindTime;\n" + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          float windPhase = instanceMatrix[3].x * 2.3 + instanceMatrix[3].z * 1.9;
+        #else
+          float windPhase = 0.0;
+        #endif
+        float windSway = sin(uWindTime * 1.6 + windPhase) * 0.85
+                        + sin(uWindTime * 3.4 + windPhase * 1.7) * 0.35;
+        float windLift = ${mode === "stem" ? "transformed.y" : pinnedHeight.toFixed(3)};
+        transformed.x += windSway * windLift * ${strength.toFixed(3)};
+        transformed.z += windSway * windLift * ${strength.toFixed(3)} * 0.6;`
+      );
+    };
   }
 
   // 0 on solid land → 1 fully dropped below the water. The land outside a
@@ -649,6 +678,90 @@ const ThreeScene = (() => {
     return geo;
   }
 
+  // Same idea as mergeInstances, but for baking a *set of different* parts
+  // (each with its own geometry) into one static geometry — used to
+  // flatten a loaded GLTF flower's many small meshes of one color (stem,
+  // petals, etc.) into a single shape InstancedMesh can replicate cheaply.
+  // Reads .getX/Y/Z off whatever BufferAttribute is handed in and .elements
+  // off whatever Matrix4 is handed in, both plain-data reads, so this
+  // happily accepts geometry/matrices from the separate module-build THREE
+  // that GLTFLoader constructs (see loadFlowerModel) even though everything
+  // else in this file is the classic global THREE.
+  function mergeGeometryList(parts) {
+    const positions = [], normals = [], indices = [];
+    const p = new THREE.Vector3(), n = new THREE.Vector3();
+    let vOffset = 0;
+    parts.forEach(({ geometry, matrix }) => {
+      const posAttr = geometry.attributes.position, normAttr = geometry.attributes.normal;
+      const idx = geometry.index;
+      const nm = new THREE.Matrix3().getNormalMatrix(matrix);
+      for (let i = 0; i < posAttr.count; i++) {
+        p.fromBufferAttribute(posAttr, i).applyMatrix4(matrix);
+        n.fromBufferAttribute(normAttr, i).applyMatrix3(nm).normalize();
+        positions.push(p.x, p.y, p.z);
+        normals.push(n.x, n.y, n.z);
+      }
+      if (idx) {
+        for (let i = 0; i < idx.count; i++) indices.push(idx.getX(i) + vOffset);
+      } else {
+        for (let i = 0; i < posAttr.count; i++) indices.push(i + vOffset);
+      }
+      vOffset += posAttr.count;
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+    geo.setIndex(indices);
+    return geo;
+  }
+
+  // Loads a GLTF flower prop (rooted at the base of its stem, like the
+  // procedural stem geometry is) and flattens it into one merged geometry
+  // per material/color — e.g. a daisy comes back as [stem+leaves(green),
+  // petals(cream), center+florets(orange)]. Every returned geometry shares
+  // the model's own local space, so a single wind-sway patch keyed off
+  // local Y bends the whole flower (stem, petals, everything) as one piece.
+  async function loadFlowerModel(url) {
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const gltf = await new Promise((resolve, reject) =>
+      new GLTFLoader().load(url, resolve, undefined, reject));
+    const scene3 = gltf.scene;
+    scene3.updateMatrixWorld(true);
+    const groups = new Map(); // material.uuid -> { color, parts }
+    scene3.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const key = obj.material.uuid;
+      if (!groups.has(key)) groups.set(key, { color: obj.material.color, parts: [] });
+      groups.get(key).parts.push({ geometry: obj.geometry, matrix: obj.matrixWorld });
+    });
+    return Array.from(groups.values()).map(({ color, parts }) => ({
+      color: new THREE.Color(color.r, color.g, color.b),
+      geometry: mergeGeometryList(parts)
+    }));
+  }
+
+  // Instances one loaded flower model (see loadFlowerModel) across a
+  // placement list — one InstancedMesh per merged color, all sharing the
+  // same placements so every part of a given flower moves together.
+  function buildFlowerSpecies(parts, placements, baseScale) {
+    const d = new THREE.Object3D();
+    parts.forEach(({ geometry, color }) => {
+      const mesh = new THREE.InstancedMesh(
+        geometry, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }), placements.length);
+      placements.forEach((p, i) => {
+        d.position.set(p.x, p.y, p.z);
+        d.rotation.set(p.rx || 0, p.ry || 0, p.rz || 0);
+        const sc = baseScale * p.s;
+        d.scale.set(sc, sc, sc);
+        d.updateMatrix();
+        mesh.setMatrixAt(i, d.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      scene.add(mesh);
+      addWindSway(mesh.material, { mode: "stem", strength: 0.55 });
+    });
+  }
+
   // A real 3D flower head: `petals` rounded, flattened-ellipsoid petals
   // (base at the flower centre, tip pointing outward) fanned evenly around
   // Y and tilted up by `tilt`, merged into one static geometry so it can
@@ -862,31 +975,32 @@ const ThreeScene = (() => {
     const insideStone = (x, z) =>
       stones.some((st) => Math.hypot(x - st.x, z - st.z) < st.sx * 1.15);
 
-    // ---------- flowers: daisy drifts + buttercups + pink spikes ----------
-    // daisy/buttercup heads are real merged petal geometry, pink florets
-    // are small lathe-turned bells (see makePetalFlowerGeometry /
-    // makeBellGeometry above) — not the old flattened spheres
-    const stems = [], daisyHeads = [], buttercupHeads = [], centers = [], florets = [];
+    // ---------- flowers: daisy drifts + roses + pink spikes ----------
+    // daisies and roses are loaded GLTF props (see loadFlowerModel,
+    // buildFlowerSpecies below — replaced the old procedural
+    // makePetalFlowerGeometry heads for these two). Pink foxglove spikes
+    // are still procedural lathe-turned bells (see makeBellGeometry).
+    const pinkStems = [], florets = [], daisyPlacements = [], rosePlacements = [];
     // cluster centers on the knoll flanks (heaviest beside the path, like
     // the board), near the big rocks, along the cliff lip inner side
     const flowerClusters = [
       { at: pathSide(0.25, 1.4), kind: "daisy", n: 13 },
       { at: pathSide(0.5, -1.5), kind: "daisy", n: 12 },
-      { at: pathSide(0.8, 1.6), kind: "gold", n: 10 },
+      { at: pathSide(0.8, 1.6), kind: "rose", n: 10 },
       { at: pathSide(0.14, -1.3), kind: "daisy", n: 10 },
       { at: [-4.2, 3.6], kind: "daisy", n: 13 },  // by the big left anchor
-      { at: [5.4, 3.0], kind: "gold", n: 10 },     // by the big right anchor
+      { at: [5.4, 3.0], kind: "rose", n: 10 },     // by the big right anchor
       { at: [-3.2, 2.0], kind: "daisy", n: 12 },
       { at: [2.6, -2.8], kind: "daisy", n: 12 },
-      { at: [-1.6, -5.6], kind: "gold", n: 10 },
+      { at: [-1.6, -5.6], kind: "rose", n: 10 },
       { at: [-4.9, -6.0], kind: "daisy", n: 12 },  // cliff-lip rocks
       { at: [4.8, -5.5], kind: "daisy", n: 10 },
       { at: [-6.2, -3.4], kind: "pink", n: 7 },
       { at: [6.6, -0.6], kind: "daisy", n: 12 },
-      { at: [0.8, 2.9], kind: "gold", n: 9 },     // right where the path crests
+      { at: [0.8, 2.9], kind: "rose", n: 9 },     // right where the path crests
       { at: [-2.1, 5.4], kind: "pink", n: 7 },
       { at: [1.5, -6.3], kind: "daisy", n: 10 },   // crest lip, breaks horizon
-      { at: [-6.8, 1.4], kind: "gold", n: 9 },
+      { at: [-6.8, 1.4], kind: "rose", n: 9 },
       { at: [3.6, 4.6], kind: "daisy", n: 10 }
     ];
     flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
@@ -902,7 +1016,7 @@ const ThreeScene = (() => {
           // foxglove-style spike: one tall stem carrying 4 small bell
           // florets, bigger near the base and budding smaller toward the tip
           const spikeH = 0.34 * s;
-          stems.push({ x, z, y, sx: 1, sy: spikeH * 2.8, sz: 1, rz: lean });
+          pinkStems.push({ x, z, y, sx: 1, sy: spikeH * 2.8, sz: 1, rz: lean });
           const floretN = 4;
           for (let f = 0; f < floretN; f++) {
             const t = f / (floretN - 1); // 0 at base, 1 at tip
@@ -917,51 +1031,33 @@ const ThreeScene = (() => {
           }
           continue;
         }
-        stems.push({ x, z, y, sx: 1, sy: s, sz: 1, rz: lean });
-        if (kind === "daisy") {
-          daisyHeads.push({
-            x: x + lean * 0.1, z, y: y + 0.098 * s,
-            sx: s, sy: s, sz: s,
-            color: new THREE.Color(0xfff6ea)
-          });
-          centers.push({
-            x: x + lean * 0.1, z, y: y + 0.104 * s,
-            sx: s * 0.42, sy: s * 0.34, sz: s * 0.42,
-            color: new THREE.Color(0xf2b135)
-          });
-        } else { // gold buttercup — fewer, rounder petals curling into a cup
-          buttercupHeads.push({
-            x: x + lean * 0.1, z, y: y + 0.096 * s,
-            sx: s * 0.9, sy: s * 0.9, sz: s * 0.9,
-            color: new THREE.Color(0xffd23e)
-          });
-        }
+        // random yaw so every instance of the (identical) loaded model
+        // doesn't face the same way
+        const ry = hash2(pi * 3.7, i * 6.3) * Math.PI * 2;
+        (kind === "daisy" ? daisyPlacements : rosePlacements).push({ x, y, z, s, rz: lean, ry });
       }
     });
+
+    // pink spike stems only now — daisy/rose stems come from their own
+    // loaded models (see below)
     const stemGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.1, 5);
     stemGeo.translate(0, 0.05, 0);
-    place(new THREE.InstancedMesh(
-      stemGeo, new THREE.MeshLambertMaterial({ color: 0x557024 }), stems.length), stems);
+    const stemMesh = place(new THREE.InstancedMesh(
+      stemGeo, new THREE.MeshLambertMaterial({ color: 0x557024 }), pinkStems.length), pinkStems);
+    addWindSway(stemMesh.material, { mode: "stem", strength: 0.55 });
 
-    const centerGeo = new THREE.SphereGeometry(0.034, 8, 6);
-    place(new THREE.InstancedMesh(
-      centerGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), centers.length), centers);
-
-    const daisyGeo = makePetalFlowerGeometry({
-      petals: 12, length: 0.030, width: 0.009, thickness: 0.0035,
-      tilt: 0.12, jitter: 0.06, seed: 21.7
-    });
-    place(new THREE.InstancedMesh(
-      daisyGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
-      daisyHeads.length), daisyHeads);
-
-    const buttercupGeo = makePetalFlowerGeometry({
-      petals: 5, length: 0.026, width: 0.017, thickness: 0.006,
-      tilt: 0.55, jitter: 0.05, seed: 34.1
-    });
-    place(new THREE.InstancedMesh(
-      buttercupGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
-      buttercupHeads.length), buttercupHeads);
+    // daisy/rose models are downloaded async — the rest of the scene
+    // doesn't wait on them, they just pop in a beat after everything else
+    Promise.all([
+      loadFlowerModel("flowers/daisy-flower.glb"),
+      loadFlowerModel("flowers/rose-flower.glb")
+    ]).then(([daisyParts, roseParts]) => {
+      // scale each model's native size down to roughly the footprint the
+      // old procedural flowers had, so cluster density/composition doesn't
+      // suddenly change — easy to retune once seen live
+      buildFlowerSpecies(daisyParts, daisyPlacements, 0.15 / 0.3242);
+      buildFlowerSpecies(roseParts, rosePlacements, 0.16 / 0.2882);
+    }).catch((e) => console.error("flower model load failed", e));
 
     const floretGeo = makeBellGeometry({
       radius: 0.018, petals: 5, scallop: 0.16,
@@ -971,6 +1067,7 @@ const ThreeScene = (() => {
       floretGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
       florets.length), florets);
     floretMesh.castShadow = false; // tiny casters = shadow-map noise
+    addWindSway(floretMesh.material, { mode: "head", strength: 0.55, pinnedHeight: 0.07 });
   }
 
   function buildLighthouse() {
@@ -1105,225 +1202,6 @@ const ThreeScene = (() => {
       boat.position.x = -45 + ((t * 0.3125) % 75);
       boat.rotation.z = Math.sin(t * 0.8) * 0.03;
       boat.position.y = -0.16 + Math.sin(t * 0.55) * 0.015;
-    });
-  }
-
-  // A flat wing silhouette — this is how real distant birds actually read
-  // against a sky (no visible feather/body detail, just the moving shape).
-  // Rounded 5-point fan (root + 4 rim points) instead of a single sharp
-  // triangle — a bare acute blade read too much like a bat wing.
-  // Two of these mirrored + a sliver body make one bird; wings hinge at
-  // the root for the flap.
-  function makeBirdWingGeometry(span, sweep, chord) {
-    const geo = new THREE.BufferGeometry();
-    const root = [0, 0, 0];
-    const p1 = [span * 0.55, -sweep * 0.25, -sweep * 0.55]; // leading bulge
-    const p2 = [span, -sweep * 0.4, -sweep * 0.15];          // rounded tip
-    const p3 = [span * 0.62, 0, chord * 0.9];                // trailing bulge
-    const p4 = [span * 0.18, 0, chord * 0.5];                // soft inner corner
-    const verts = new Float32Array([
-      ...root, ...p1, ...p2,
-      ...root, ...p2, ...p3,
-      ...root, ...p3, ...p4
-    ]);
-    geo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  // Same shape, but with a per-vertex color gradient from a dark body tone
-  // to a warm gold tone at the outer rim — approximates the sun grazing the
-  // trailing edge of a backlit wing at golden hour, without an actual light.
-  function makeBirdWingGeometryGradient(span, sweep, chord, innerColor, outerColor) {
-    const geo = makeBirdWingGeometry(span, sweep, chord);
-    const inner = new THREE.Color(innerColor);
-    const outer = new THREE.Color(outerColor);
-    // matches the vertex order from makeBirdWingGeometry: root,p1,p2, root,p2,p3, root,p3,p4
-    const weights = [0, 0.5, 1, 0, 1, 0.6, 0, 0.6, 0.2];
-    const colors = new Float32Array(weights.length * 3);
-    const c = new THREE.Color();
-    weights.forEach((w, i) => {
-      c.copy(inner).lerp(outer, w);
-      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
-    });
-    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    return geo;
-  }
-
-  // Camera-facing billboard alternative: a 2-frame flipbook (glide / flap)
-  // painted onto one canvas, the same silhouette shape drawn in 2D instead
-  // of built from 3D wing meshes. This is how a lot of games actually do
-  // background birds — always reads correctly regardless of view angle,
-  // and is one draw call per bird instead of three.
-  // 6-frame flipbook covering a full wingbeat (frame 0 is the glide/hold
-  // pose used between flap bursts). Painted in flat white so it can be
-  // tinted per bird via SpriteMaterial.color — same trick this file
-  // already uses for clouds (one grayscale texture, N tints) instead of
-  // baking one color into the texture.
-  const BIRD_FRAMES = 6;
-  function makeBirdSpriteSheet() {
-    const c = document.createElement("canvas");
-    c.width = 64 * BIRD_FRAMES; c.height = 64;
-    const ctx = c.getContext("2d");
-    // droop per frame: how far the wingtips sit above the shoulder line
-    // (canvas y shrinks upward) — glide, then a push-down power stroke,
-    // rising back through flat, up to a raised recovery peak, descending
-    const droops = [4, -5, 3, 14, 24, 14];
-    droops.forEach((droop, i) => {
-      const cx = i * 64 + 32, cy = 34, span = 27;
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 2);
-      ctx.quadraticCurveTo(cx - span * 0.5, cy - droop * 0.5 - 4, cx - span, cy - droop - 4);
-      ctx.quadraticCurveTo(cx - span * 0.6, cy + 3, cx - span * 0.22, cy + 7);
-      ctx.quadraticCurveTo(cx - span * 0.08, cy + 3, cx, cy - 2);
-      ctx.quadraticCurveTo(cx + span * 0.08, cy + 3, cx + span * 0.22, cy + 7);
-      ctx.quadraticCurveTo(cx + span * 0.6, cy + 3, cx + span, cy - droop - 4);
-      ctx.quadraticCurveTo(cx + span * 0.5, cy - droop * 0.5 - 4, cx, cy - 2);
-      ctx.closePath();
-      ctx.fill();
-    });
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.repeat.set(1 / BIRD_FRAMES, 1);
-    return tex;
-  }
-
-  function buildBirds(mode, style) {
-    /* Small flock (5 birds), one of two flight behaviors (BIRD_MODE) and one
-       of three visual styles (BIRD_STYLE — see the constant up top):
-       "dark" flat warm-dark silhouette, "rimlit" same shape with a
-       dark-to-gold vertex gradient, "billboard" a camera-facing sprite
-       instead of 3D wing meshes. Local +Z is each bird's nose direction —
-       heading is derived each frame from its own flight-path formula
-       (sampled a moment apart) so orientation always matches actual travel,
-       no separate steering logic to keep in sync. Bank on a billboard is
-       approximated as a 2D image rotation since a sprite can't lean in 3D. */
-    const DARK = 0x352a24, GOLD = 0xf0c070;
-    const wingGeo = style === "rimlit"
-      ? makeBirdWingGeometryGradient(0.34, 0.07, 0.13, DARK, GOLD)
-      : makeBirdWingGeometry(0.34, 0.07, 0.13);
-    const bodyGeo = new THREE.ConeGeometry(0.02, 0.18, 6);
-    bodyGeo.rotateX(Math.PI / 2);
-    const mat = style === "rimlit"
-      ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true })
-      : new THREE.MeshBasicMaterial({ color: DARK, side: THREE.DoubleSide, fog: true });
-    const spriteTex = style === "billboard" ? makeBirdSpriteSheet() : null;
-
-    const N = 5;
-    const birds = [];
-    for (let i = 0; i < N; i++) {
-      const scale = 1.5 + hash2(61.1, i) * 0.8; // wingspan variety
-      let obj, lPivot = null, rPivot = null;
-      if (style === "billboard") {
-        // one shared grayscale texture, tinted per bird (same trick as the
-        // sky's cloud sprites) — a little hue/lightness jitter so the flock
-        // isn't five identical stamped copies
-        const tint = new THREE.Color(DARK);
-        const hsl = { h: 0, s: 0, l: 0 };
-        tint.getHSL(hsl);
-        tint.setHSL(hsl.h + (hash2(78.1, i) - 0.5) * 0.04, hsl.s, hsl.l + (hash2(79.3, i) - 0.5) * 0.08);
-        obj = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex, color: tint, transparent: true, depthWrite: false, fog: true }));
-        obj.scale.set(scale * 1.1, scale * 0.55, 1);
-      } else {
-        obj = new THREE.Group();
-        lPivot = new THREE.Group();
-        lPivot.add(new THREE.Mesh(wingGeo, mat));
-        rPivot = new THREE.Group();
-        const rWing = new THREE.Mesh(wingGeo, mat);
-        rWing.scale.x = -1;
-        rPivot.add(rWing);
-        obj.add(lPivot, rPivot, new THREE.Mesh(bodyGeo, mat));
-        obj.scale.setScalar(scale);
-      }
-      scene.add(obj);
-      // evenly spread starting angle/phase around the circle (plus a little
-      // jitter) instead of pure random, so 5 birds can't clump by chance —
-      // that's what read as a tight swarm instead of a loose flock
-      const evenPhase = (i / N) * Math.PI * 2;
-      birds.push({
-        obj, lPivot, rPivot,
-        flapPhase: hash2(62.3, i) * 10,
-        bobPhase: hash2(63.9, i) * 10,
-        // mode-specific flight params — wider orbit, looser spread per bird
-        radius: 6.5 + hash2(64.1, i) * 3.5,
-        altitude: mode === "lighthouse" ? 5 + hash2(65.3, i) * 4.0 : 6.5 + hash2(65.3, i) * 2.5,
-        angSpeed: (0.07 + hash2(66.7, i) * 0.04) * (i % 2 === 0 ? 1 : -1),
-        angPhase: evenPhase + (hash2(67.1, i) - 0.5) * 0.8,
-        bobAmp: 0.25 + hash2(68.3, i) * 0.2,
-        // "sky" wander params: a slow main loop plus a faster smaller
-        // loop layered on top, so the path is denser near the centre but
-        // still ranges out wide over its cycle instead of sitting still
-        wx: -6 + hash2(69.1, i) * 8, wz: -30 + hash2(70.3, i) * 16, wy: 7 + hash2(71.7, i),
-        wSpeed: 0.05 + hash2(72.9, i) * 0.02,
-        wPhase: hash2(73.3, i) * Math.PI * 2,
-        wRangeX: 7 + hash2(74.1, i) * 3, wRangeZ: 10 + hash2(75.3, i) * 4,
-        driftSpeed: 0.13 + hash2(76.7, i) * 0.05,
-        driftPhase: hash2(77.9, i) * Math.PI * 2
-      });
-    }
-
-    function positionAt(b, t) {
-      if (mode === "lighthouse") {
-        const ang = t * b.angSpeed + b.angPhase;
-        return [
-          1.5 + Math.cos(ang) * b.radius,
-          b.altitude + Math.sin(t * 0.5 + b.bobPhase) * b.bobAmp,
-          -52 + Math.sin(ang) * b.radius
-        ];
-      }
-      // "sky": Lissajous-style wander — slow big loop (wSpeed) biased around
-      // (wx, wz), with a faster smaller loop (driftSpeed) layered in so the
-      // path isn't a clean ellipse and ranges further out sometimes.
-      const a = t * b.wSpeed + b.wPhase;
-      const d = t * b.driftSpeed + b.driftPhase;
-      return [
-        b.wx + Math.sin(a) * b.wRangeX + Math.sin(d * 1.7) * b.wRangeX * 0.35,
-        b.wy + Math.sin(t * 0.3 + b.bobPhase) * 1.1,
-        b.wz + Math.cos(a * 0.8) * b.wRangeZ + Math.cos(d) * b.wRangeZ * 0.3
-      ];
-    }
-
-    const DT = 0.08;
-    tickers.push((t) => {
-      birds.forEach((b) => {
-        const p0 = positionAt(b, t);
-        const p1 = positionAt(b, t + DT);
-        const p2 = positionAt(b, t + DT * 2);
-        b.obj.position.set(p0[0], p0[1], p0[2]);
-
-        const h0 = Math.atan2(p1[0] - p0[0], p1[2] - p0[2]);
-        const h1 = Math.atan2(p2[0] - p1[0], p2[2] - p1[2]);
-        const speed = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) / DT || 0.001;
-        const pitch = -Math.atan2((p1[1] - p0[1]) / DT, speed) * 0.6;
-        let dHeading = h1 - h0;
-        dHeading = ((dHeading + Math.PI) % (Math.PI * 2)) - Math.PI;
-        const bank = Math.max(-0.5, Math.min(0.5, (dHeading / DT) * 0.3));
-
-        // flap-burst-then-glide, not a nonstop flap — reads far more like
-        // a real bird coasting between wingbeats
-        const cycle = 2.4, flapDur = 1.0;
-        const localT = (t + b.flapPhase) % cycle;
-        const env = localT < flapDur ? Math.sin((localT / flapDur) * Math.PI) : 0;
-
-        if (b.lPivot) {
-          // true 3D wing meshes: full 3D orientation + hinge flap
-          b.obj.rotation.set(pitch, h0, bank);
-          const flap = env * 0.85 * Math.sin(t * 10 + b.flapPhase * 3);
-          b.lPivot.rotation.z = flap;
-          b.rPivot.rotation.z = -flap;
-        } else {
-          // billboard sprite: always faces the camera, so "heading" can't
-          // be shown — bank is approximated as a 2D in-image rotation.
-          // Flap is a 6-frame flipbook cycle instead of a hinge rotation:
-          // frame 0 is the glide/hold pose, frames 1-5 step through one
-          // wingbeat while a burst is active.
-          b.obj.material.rotation = bank;
-          const beatPhase = (t * 10 + b.flapPhase * 3) / (Math.PI * 2);
-          const frame = env > 0.05 ? 1 + Math.floor(((beatPhase % 1) + 1) % 1 * (BIRD_FRAMES - 1)) : 0;
-          b.obj.material.map.offset.x = frame / BIRD_FRAMES;
-        }
-      });
     });
   }
 
