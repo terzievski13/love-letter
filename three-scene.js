@@ -32,6 +32,14 @@ const ThreeScene = (() => {
   // lighthouse islet. "sky": a small flock wanders the mid-sky in front of
   // the mountains, biased to stay near the default outside-camera framing.
   const BIRD_MODE = "lighthouse"; // "lighthouse" | "sky"
+  // Three visual styles to compare — flip this constant too, then reload.
+  // "dark": flat warm-dark silhouette (the physically correct look — distant
+  // birds read dark even when not actually dark, because they're backlit).
+  // "rimlit": same shape, dark body fading to a warm gold rim at the wing
+  // edges, like sunset light grazing the feathers. "billboard": a 2D
+  // camera-facing sprite instead of 3D wing meshes, the way a lot of games
+  // actually do background birds.
+  const BIRD_STYLE = "dark"; // "dark" | "rimlit" | "billboard"
 
   let camAnim = null; // {start, from, to, lookFrom, lookTo, dur}
   let currentLook = new THREE.Vector3(0, 1.6, 0);
@@ -65,7 +73,7 @@ const ThreeScene = (() => {
     scene.background = new THREE.Color(0xeebA90);
     scene.fog = new THREE.Fog(0xeeb890, 30, 175);
 
-    camera = new THREE.PerspectiveCamera(55, initW / initH, 0.1, 200);
+    camera = new THREE.PerspectiveCamera(isMobile ? 70 : 60, initW / initH, 0.1, 200);
     camera.position.set(...CAM.outside.pos);
     camera.lookAt(...CAM.outside.look);
 
@@ -80,7 +88,7 @@ const ThreeScene = (() => {
     buildScatter();
     buildLighthouse();
     buildSailboat();
-    buildBirds(BIRD_MODE);
+    buildBirds(BIRD_MODE, BIRD_STYLE);
     buildMailbox();
     buildLights();
 
@@ -1123,39 +1131,103 @@ const ThreeScene = (() => {
     return geo;
   }
 
-  function buildBirds(mode) {
-    /* Small flock (5 birds), one of two behaviors picked by BIRD_MODE:
-       "lighthouse" orbits the islet, "sky" wanders the mid-sky in front
-       of the mountains. Local +Z is each bird's nose direction — heading
-       is derived each frame from its own flight-path formula (sampled a
-       moment apart) so orientation always matches actual travel, no
-       separate steering logic to keep in sync. */
-    const wingGeo = makeBirdWingGeometry(0.34, 0.07, 0.13);
+  // Same shape, but with a per-vertex color gradient from a dark body tone
+  // to a warm gold tone at the outer rim — approximates the sun grazing the
+  // trailing edge of a backlit wing at golden hour, without an actual light.
+  function makeBirdWingGeometryGradient(span, sweep, chord, innerColor, outerColor) {
+    const geo = makeBirdWingGeometry(span, sweep, chord);
+    const inner = new THREE.Color(innerColor);
+    const outer = new THREE.Color(outerColor);
+    // matches the vertex order from makeBirdWingGeometry: root,p1,p2, root,p2,p3, root,p3,p4
+    const weights = [0, 0.5, 1, 0, 1, 0.6, 0, 0.6, 0.2];
+    const colors = new Float32Array(weights.length * 3);
+    const c = new THREE.Color();
+    weights.forEach((w, i) => {
+      c.copy(inner).lerp(outer, w);
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    });
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return geo;
+  }
+
+  // Camera-facing billboard alternative: a 2-frame flipbook (glide / flap)
+  // painted onto one canvas, the same silhouette shape drawn in 2D instead
+  // of built from 3D wing meshes. This is how a lot of games actually do
+  // background birds — always reads correctly regardless of view angle,
+  // and is one draw call per bird instead of three.
+  function makeBirdSpriteTexture(color) {
+    const c = document.createElement("canvas");
+    c.width = 128; c.height = 64;
+    const ctx = c.getContext("2d");
+    function drawFrame(ox, droop) {
+      const cx = ox + 32, cy = 34, span = 27;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 2);
+      ctx.quadraticCurveTo(cx - span * 0.5, cy - droop * 0.5 - 4, cx - span, cy - droop - 4);
+      ctx.quadraticCurveTo(cx - span * 0.6, cy + 3, cx - span * 0.22, cy + 7);
+      ctx.quadraticCurveTo(cx - span * 0.08, cy + 3, cx, cy - 2);
+      ctx.quadraticCurveTo(cx + span * 0.08, cy + 3, cx + span * 0.22, cy + 7);
+      ctx.quadraticCurveTo(cx + span * 0.6, cy + 3, cx + span, cy - droop - 4);
+      ctx.quadraticCurveTo(cx + span * 0.5, cy - droop * 0.5 - 4, cx, cy - 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    drawFrame(0, 4);    // glide: wings nearly flat
+    drawFrame(64, 20);  // flap: wings raised
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.repeat.set(0.5, 1);
+    return tex;
+  }
+
+  function buildBirds(mode, style) {
+    /* Small flock (5 birds), one of two flight behaviors (BIRD_MODE) and one
+       of three visual styles (BIRD_STYLE — see the constant up top):
+       "dark" flat warm-dark silhouette, "rimlit" same shape with a
+       dark-to-gold vertex gradient, "billboard" a camera-facing sprite
+       instead of 3D wing meshes. Local +Z is each bird's nose direction —
+       heading is derived each frame from its own flight-path formula
+       (sampled a moment apart) so orientation always matches actual travel,
+       no separate steering logic to keep in sync. Bank on a billboard is
+       approximated as a 2D image rotation since a sprite can't lean in 3D. */
+    const DARK = 0x352a24, GOLD = 0xf0c070;
+    const wingGeo = style === "rimlit"
+      ? makeBirdWingGeometryGradient(0.34, 0.07, 0.13, DARK, GOLD)
+      : makeBirdWingGeometry(0.34, 0.07, 0.13);
     const bodyGeo = new THREE.ConeGeometry(0.02, 0.18, 6);
     bodyGeo.rotateX(Math.PI / 2);
-    // bright warm blush — reads clearly against the sunset instead of a
-    // stark black bat silhouette
-    const mat = new THREE.MeshBasicMaterial({ color: 0xf6d0da, side: THREE.DoubleSide, fog: true });
+    const mat = style === "rimlit"
+      ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true })
+      : new THREE.MeshBasicMaterial({ color: DARK, side: THREE.DoubleSide, fog: true });
+    const spriteTex = style === "billboard" ? makeBirdSpriteTexture("#352a24") : null;
 
     const N = 5;
     const birds = [];
     for (let i = 0; i < N; i++) {
-      const group = new THREE.Group();
-      const lPivot = new THREE.Group();
-      lPivot.add(new THREE.Mesh(wingGeo, mat));
-      const rPivot = new THREE.Group();
-      const rWing = new THREE.Mesh(wingGeo, mat);
-      rWing.scale.x = -1;
-      rPivot.add(rWing);
-      group.add(lPivot, rPivot, new THREE.Mesh(bodyGeo, mat));
-      group.scale.setScalar(1.5 + hash2(61.1, i) * 0.8); // wingspan variety
-      scene.add(group);
+      const scale = 1.5 + hash2(61.1, i) * 0.8; // wingspan variety
+      let obj, lPivot = null, rPivot = null;
+      if (style === "billboard") {
+        obj = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex, transparent: true, depthWrite: false, fog: true }));
+        obj.scale.set(scale * 1.1, scale * 0.55, 1);
+      } else {
+        obj = new THREE.Group();
+        lPivot = new THREE.Group();
+        lPivot.add(new THREE.Mesh(wingGeo, mat));
+        rPivot = new THREE.Group();
+        const rWing = new THREE.Mesh(wingGeo, mat);
+        rWing.scale.x = -1;
+        rPivot.add(rWing);
+        obj.add(lPivot, rPivot, new THREE.Mesh(bodyGeo, mat));
+        obj.scale.setScalar(scale);
+      }
+      scene.add(obj);
       // evenly spread starting angle/phase around the circle (plus a little
       // jitter) instead of pure random, so 5 birds can't clump by chance —
       // that's what read as a tight swarm instead of a loose flock
       const evenPhase = (i / N) * Math.PI * 2;
       birds.push({
-        group, lPivot, rPivot,
+        obj, lPivot, rPivot,
         flapPhase: hash2(62.3, i) * 10,
         bobPhase: hash2(63.9, i) * 10,
         // mode-specific flight params — wider orbit, looser spread per bird
@@ -1203,27 +1275,35 @@ const ThreeScene = (() => {
         const p0 = positionAt(b, t);
         const p1 = positionAt(b, t + DT);
         const p2 = positionAt(b, t + DT * 2);
-        b.group.position.set(p0[0], p0[1], p0[2]);
+        b.obj.position.set(p0[0], p0[1], p0[2]);
 
         const h0 = Math.atan2(p1[0] - p0[0], p1[2] - p0[2]);
         const h1 = Math.atan2(p2[0] - p1[0], p2[2] - p1[2]);
-        b.group.rotation.y = h0;
-
         const speed = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) / DT || 0.001;
-        b.group.rotation.x = -Math.atan2((p1[1] - p0[1]) / DT, speed) * 0.6;
-
+        const pitch = -Math.atan2((p1[1] - p0[1]) / DT, speed) * 0.6;
         let dHeading = h1 - h0;
         dHeading = ((dHeading + Math.PI) % (Math.PI * 2)) - Math.PI;
-        b.group.rotation.z = Math.max(-0.5, Math.min(0.5, (dHeading / DT) * 0.3));
+        const bank = Math.max(-0.5, Math.min(0.5, (dHeading / DT) * 0.3));
 
         // flap-burst-then-glide, not a nonstop flap — reads far more like
         // a real bird coasting between wingbeats
         const cycle = 2.4, flapDur = 1.0;
         const localT = (t + b.flapPhase) % cycle;
         const env = localT < flapDur ? Math.sin((localT / flapDur) * Math.PI) : 0;
-        const flap = env * 0.85 * Math.sin(t * 10 + b.flapPhase * 3);
-        b.lPivot.rotation.z = flap;
-        b.rPivot.rotation.z = -flap;
+
+        if (b.lPivot) {
+          // true 3D wing meshes: full 3D orientation + hinge flap
+          b.obj.rotation.set(pitch, h0, bank);
+          const flap = env * 0.85 * Math.sin(t * 10 + b.flapPhase * 3);
+          b.lPivot.rotation.z = flap;
+          b.rPivot.rotation.z = -flap;
+        } else {
+          // billboard sprite: always faces the camera, so "heading" can't
+          // be shown — bank is approximated as a 2D in-image rotation, and
+          // the flap is a frame swap instead of a hinge rotation
+          b.obj.material.rotation = bank;
+          b.obj.material.map.offset.x = env > 0.5 ? 0.5 : 0;
+        }
       });
     });
   }
