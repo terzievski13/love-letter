@@ -37,11 +37,6 @@ const ThreeScene = (() => {
     for (let i = 0; i < tickers.length; i++) tickers[i](t);
   }
 
-  // Wind-sway shader time — every swaying material shares one clock so
-  // stems and the heads sitting on them stay in phase with each other.
-  const windUniforms = [];
-  tickers.push((t) => { windUniforms.forEach((u) => { u.value = t; }); });
-
   // door rotation
   let doorTarget = 0;
   let doorCurrent = 0;
@@ -195,101 +190,186 @@ const ThreeScene = (() => {
   }
 
   function buildWater() {
-    // Base water: same palette gradient as before. The ripples and glitter
-    // moved out of the base into animated overlays — all motion is texture
-    // offset scrolling, zero per-frame canvas uploads.
-    const c = document.createElement("canvas");
-    c.width = 256; c.height = 256;
-    const ctx = c.getContext("2d");
-    const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0.00, "#1e3248"); // deep blue far horizon
-    g.addColorStop(0.30, "#2e5070"); // rich mid-lake blue
-    g.addColorStop(0.65, "#4a7a98"); // brighter mid
-    g.addColorStop(1.00, "#68a8c4"); // clean near-shore blue
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
+    // One shader-driven water plane, replacing the old texture stack
+    // (base gradient + two scrolling ripple overlays + a separate glitter
+    // streak plane aimed at the sun). Everything — the depth-based color,
+    // the gentle moving ripples, and the golden glitter path — now comes
+    // from a single fragment shader:
+    //   - color ramp: same four stops as the old canvas gradient, blended
+    //     by world-space distance instead of a baked texture
+    //   - ripples: a small sum of traveling sine waves, read as a fake
+    //     bump normal (via their analytic slope) rather than displacing
+    //     actual geometry — the plane has no subdivisions, so all of the
+    //     "wave" look is a per-pixel lighting trick, not real motion
+    //   - glitter: a Blinn-Phong-style specular toward the real sun
+    //     position, broken into individual twinkling grains (a hashed
+    //     on/off grid re-rolled a few times a second) instead of one
+    //     smooth highlight — this is what used to be the separate streak
+    //     plane, but it now emerges naturally from the ripple normals, so
+    //     it's wide near shore and narrows toward the sun on its own,
+    //     the way real water glitter actually falls off with distance
+    const waterUniforms = THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        uTime: { value: 0 },
+        // matches the sun sprite position in buildSun() — the glint
+        // targets this exact point (not just a fixed direction) so it
+        // visibly converges toward the real sun as the camera moves,
+        // instead of looking like a decal painted on the water
+        uSunPos: { value: new THREE.Vector3(-75, 3, -130) }
+      }
+    ]);
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(600, 400),
-      new THREE.MeshBasicMaterial({ map: tex, fog: true })
+      new THREE.ShaderMaterial({
+        uniforms: waterUniforms,
+        fog: true,
+        vertexShader: `
+          varying vec3 vWorldPos;
+          #include <fog_pars_vertex>
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPos = worldPosition.xyz;
+            vec4 mvPosition = viewMatrix * worldPosition;
+            gl_Position = projectionMatrix * mvPosition;
+            #include <fog_vertex>
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform vec3 uSunPos;
+          varying vec3 vWorldPos;
+          #include <fog_pars_fragment>
+
+          // same four stops as the old canvas gradient (deep far horizon
+          // to clean near-shore blue), blended with smoothstep instead of
+          // linear so the bands melt into each other a little softer
+          vec3 colorRamp(float t) {
+            vec3 c0 = vec3(0.1176, 0.1961, 0.2824);
+            vec3 c1 = vec3(0.1804, 0.3137, 0.4392);
+            vec3 c2 = vec3(0.2902, 0.4784, 0.5961);
+            vec3 c3 = vec3(0.4078, 0.6588, 0.7686);
+            vec3 col = mix(c0, c1, smoothstep(0.0, 0.30, t));
+            col = mix(col, c2, smoothstep(0.30, 0.65, t));
+            col = mix(col, c3, smoothstep(0.65, 1.0, t));
+            return col;
+          }
+
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+          }
+
+          void main() {
+            // far horizon (world z -300) to near shore (world z +100),
+            // matching the water plane's own span
+            float t = clamp((vWorldPos.z + 300.0) / 400.0, 0.0, 1.0);
+            vec3 baseColor = colorRamp(t);
+
+            // three slow traveling waves at odd angles (not axis-aligned,
+            // so the pattern doesn't read as a grid) — read only as an
+            // analytic slope, never as real displacement
+            vec2 p = vWorldPos.xz;
+            vec2 dir1 = normalize(vec2(0.7, 0.3));
+            vec2 dir2 = normalize(vec2(-0.4, 0.9));
+            vec2 dir3 = normalize(vec2(0.9, -0.4));
+            float f1 = 0.35; float f2 = 0.6; float f3 = 1.3;
+            float s1 = 0.35; float s2 = -0.25; float s3 = 0.5;
+            float a1 = 0.12; float a2 = 0.08; float a3 = 0.05;
+
+            vec2 grad = cos(dot(p, dir1) * f1 + uTime * s1) * f1 * dir1 * a1
+                      + cos(dot(p, dir2) * f2 + uTime * s2) * f2 * dir2 * a2
+                      + cos(dot(p, dir3) * f3 + uTime * s3) * f3 * dir3 * a3;
+            vec3 bumpNormal = normalize(vec3(-grad.x, 1.0, -grad.y));
+
+            // a whisper of brightness variation from the same waves so the
+            // surface doesn't read as flat-shaded even away from the glints
+            float heightSum = sin(dot(p, dir1) * f1 + uTime * s1) * a1
+                             + sin(dot(p, dir2) * f2 + uTime * s2) * a2;
+            baseColor *= 1.0 + heightSum * 0.05;
+
+            // distant wave streaks: thin horizontal lines that travel
+            // toward shore (perpendicular to their own length), the way
+            // real distant swell rolls in toward the beach. The line
+            // positions are what move now — rowPhase carries -uTime so
+            // the bands travel in +z (toward the camera/shore) — while
+            // the dash/gap pattern along each line's length (built from
+            // x only, no uTime) stays put relative to its line, riding
+            // along with it instead of sliding sideways on its own.
+            // Fragment-only, so it can never leave the water mesh.
+            //
+            // Two things made this look too stiff: perfectly even spacing
+            // (a plain sine gives every band the same gap) and every band
+            // showing up at full strength. Domain-warp the y input with a
+            // couple of slow, mismatched sines before computing the band
+            // phase so the lines bend and the spacing breathes instead of
+            // reading as ruled paper, and randomly mute roughly half the
+            // rows entirely so streaks appear at irregular intervals.
+            float warp = sin(p.x * 0.03 + p.y * 0.017) * 2.4
+                       + sin(p.y * 0.021 - p.x * 0.011) * 1.6;
+            float rowPhase = (p.y + warp) * 0.4 + p.x * 0.05 - uTime * 0.28;
+            float rowMask = pow(max(sin(rowPhase), 0.0), 16.0);
+            float rowId = floor(rowPhase / 6.2832);
+            float rowHashA = hash(vec2(rowId, 1.7));
+            float rowHashB = hash(vec2(rowId, 4.2));
+            float rowHashC = hash(vec2(rowId, 7.9));
+            float rowVisible = step(0.45, rowHashC);
+            // longer wavelength than before (0.05–0.14 vs a fixed 0.3) so
+            // each bright dash covers more distance, and both the
+            // wavelength and the on/off ratio are randomized per row —
+            // no two streaks are the same length
+            float freqX = mix(0.05, 0.14, rowHashA);
+            float streakPhase = p.x * freqX + rowHashA * 6.2832;
+            float onThreshold = mix(-0.4, 0.3, rowHashB);
+            float streakShimmer = smoothstep(onThreshold, onThreshold + 0.5, sin(streakPhase));
+            float streak = rowMask * streakShimmer * rowVisible;
+            baseColor = mix(baseColor, vec3(0.92, 0.97, 1.0), streak * 0.14);
+
+            // specular toward the sun's actual position (not just a fixed
+            // direction) — targeting the real point makes the glint
+            // visibly converge toward it as the camera moves during the
+            // mailbox zoom, so it reads as a reflection of that sun
+            // rather than a static pattern drawn on the water. A fixed
+            // direction looked fine from one still angle but didn't track
+            // correctly once the camera actually moved.
+            vec3 toSun = normalize(uSunPos - vWorldPos);
+            vec3 toCam = normalize(cameraPosition - vWorldPos);
+            // guard against toSun/toCam nearly canceling out (near-zero
+            // vector into normalize() is a NaN/Inf blowup, which reads as
+            // white speckle noise on screen) — falls back to "no glint"
+            vec3 halfRaw = toSun + toCam;
+            float halfLen = length(halfRaw);
+            vec3 halfDir = halfLen > 0.0001 ? halfRaw / halfLen : bumpNormal;
+            // a tight-ish exponent so the glint stays a sliver, not a
+            // wide wash, but wide enough to read as a bold streak
+            float spec = pow(max(dot(bumpNormal, halfDir), 0.0), 180.0);
+
+            // break the highlight into many small grains, each with its
+            // own brightness cycling smoothly over time (a sine wave with
+            // a per-grain phase from a hash) — no hard on/off switch, so
+            // nothing ever pops; grains just continuously brighten and
+            // fade at slightly different times, reading as one flowing
+            // shimmer instead of individually blinking points
+            vec2 cell = floor(p * 18.0);
+            float cellPhase = hash(cell) * 6.2832;
+            float shimmer = 0.5 + 0.5 * sin(uTime * 3.0 + cellPhase);
+            float sparkle = spec * smoothstep(0.5, 1.0, shimmer);
+
+            vec3 glintColor = vec3(1.0, 0.58, 0.2);
+            vec3 finalColor = baseColor + glintColor * sparkle * 1.8;
+            finalColor = min(finalColor, vec3(1.0));
+
+            gl_FragColor = vec4(finalColor, 1.0);
+            #include <fog_fragment>
+          }
+        `
+      })
     );
     // y=-0.22: low enough that the knoll's dipped skirt (clamped at -0.14
     // in groundHeight) never floods
     water.rotation.x = -Math.PI / 2;
     water.position.set(0, -0.22, -100);
     scene.add(water);
-
-    // Tiling ripple-dash tile; dashes drawn three times (x, x±128) so the
-    // texture wraps seamlessly when it scrolls.
-    function makeRippleTexture(seed, count) {
-      const rc = document.createElement("canvas");
-      rc.width = rc.height = 128;
-      const rctx = rc.getContext("2d");
-      for (let i = 0; i < count; i++) {
-        const y = Math.floor(hash2(seed, i * 7.3) * 128);
-        const x = Math.floor(hash2(seed * 3.1, i * 2.9) * 128);
-        const len = 18 + hash2(seed * 1.7, i * 5.1) * 42;
-        const a = 0.15 + hash2(seed * 2.3, i * 3.7) * 0.3;
-        rctx.fillStyle = "rgba(210,235,255," + a.toFixed(2) + ")";
-        rctx.fillRect(x - 64, y, len, 2);
-        rctx.fillRect(x - 64 + 128, y, len, 2);
-        rctx.fillRect(x - 64 - 128, y, len, 2);
-      }
-      const t = new THREE.CanvasTexture(rc);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      return t;
-    }
-
-    // Two overlays at different tilings scrolling opposite ways — layered
-    // shimmer without a shader.
-    [
-      { seed: 5.7, count: 26, rep: [10, 7], y: -0.16, opacity: 0.28, speed: 0.010 },
-      { seed: 9.2, count: 18, rep: [6, 4],  y: -0.18, opacity: 0.20, speed: -0.007 }
-    ].forEach((o) => {
-      const t = makeRippleTexture(o.seed, o.count);
-      t.repeat.set(o.rep[0], o.rep[1]);
-      const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(600, 400),
-        new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: o.opacity, depthWrite: false, fog: true })
-      );
-      m.rotation.x = -Math.PI / 2;
-      m.position.set(0, o.y, -100);
-      scene.add(m);
-      tickers.push((time) => { t.offset.x = time * o.speed; });
-    });
-
-    // Warm glitter path on the water, running from under the sun toward the
-    // shore. Additive and fog-free (fog would gray the sparkle out) — the
-    // one deliberate fog exception in the landscape.
-    const sc = document.createElement("canvas");
-    sc.width = 64; sc.height = 256;
-    const sctx = sc.getContext("2d");
-    for (let i = 0; i < 150; i++) {
-      const v = Math.random();                    // 0 = shore end, 1 = sun end
-      const py = Math.floor((1 - v) * 250);       // canvas top row is v=1
-      const spread = 26 - 16 * v;                 // narrows toward the sun
-      const px = 32 + (Math.random() - 0.5) * spread;
-      const a = (0.12 + 0.55 * v * v) * (1 - Math.abs(px - 32) / (spread * 0.6 + 4));
-      if (a <= 0.02) continue;
-      sctx.fillStyle = "rgba(255,215,140," + Math.min(a, 0.8).toFixed(2) + ")";
-      sctx.fillRect(Math.floor(px - 3 - Math.random() * 4), py, 7 + Math.floor(Math.random() * 9), 2);
-    }
-    const stex = new THREE.CanvasTexture(sc);
-    stex.colorSpace = THREE.SRGBColorSpace;
-    const sgeo = new THREE.PlaneGeometry(6, 115);
-    sgeo.rotateX(-Math.PI / 2);
-    const smat = new THREE.MeshBasicMaterial({
-      map: stex, transparent: true, blending: THREE.AdditiveBlending,
-      depthWrite: false, fog: false
-    });
-    const streak = new THREE.Mesh(sgeo, smat);
-    // long axis aimed from the sun (−75, −130) toward the camera side
-    streak.rotation.y = 0.52;
-    streak.position.set(-46.5, -0.14, -80);
-    scene.add(streak);
-    tickers.push((time) => { smat.opacity = 0.78 + 0.22 * Math.sin(time * 0.6); });
+    tickers.push((t) => { waterUniforms.uTime.value = t; });
   }
 
   function buildSun() {
@@ -356,45 +436,6 @@ const ThreeScene = (() => {
   function sstep(e0, e1, x) {
     const t = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
     return t * t * (3 - 2 * t);
-  }
-
-  /* Wind sway: patches an existing lit material's vertex shader (instead
-     of replacing it with a bare ShaderMaterial) so instances keep their
-     normal Lambert lighting/shadows and just gain a gentle side-to-side
-     bend. Two modes:
-       "stem"   — geometry rooted at local y=0 (see stemGeo.translate).
-                  Displacement grows with local y, so the base stays
-                  planted and the tip sways most, like a real stalk.
-       "head"   — flower heads/centers/florets are small blobs centered
-                  near their own origin, not rooted at y=0, so they sway
-                  as a rigid whole (pinnedHeight approximates how far up
-                  the stem they sit) to stay glued to the stem tip below
-                  them instead of drifting independently.
-     Every instance gets its own phase from its instance position (baked
-     into instanceMatrix by `place()`), so the whole drift doesn't wave
-     in unison — it ripples across the cluster like real wind gusts do. */
-  function addWindSway(material, { mode = "stem", strength = 0.5, pinnedHeight = 0.1 } = {}) {
-    const uniform = { value: 0 };
-    windUniforms.push(uniform);
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.uWindTime = uniform;
-      shader.vertexShader =
-        "uniform float uWindTime;\n" + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          float windPhase = instanceMatrix[3].x * 2.3 + instanceMatrix[3].z * 1.9;
-        #else
-          float windPhase = 0.0;
-        #endif
-        float windSway = sin(uWindTime * 1.6 + windPhase) * 0.85
-                        + sin(uWindTime * 3.4 + windPhase * 1.7) * 0.35;
-        float windLift = ${mode === "stem" ? "transformed.y" : pinnedHeight.toFixed(3)};
-        transformed.x += windSway * windLift * ${strength.toFixed(3)};
-        transformed.z += windSway * windLift * ${strength.toFixed(3)} * 0.6;`
-      );
-    };
   }
 
   // 0 on solid land → 1 fully dropped below the water. The land outside a
@@ -758,7 +799,6 @@ const ThreeScene = (() => {
       });
       mesh.instanceMatrix.needsUpdate = true;
       scene.add(mesh);
-      addWindSway(mesh.material, { mode: "stem", strength: 0.55 });
     });
   }
 
@@ -803,33 +843,49 @@ const ThreeScene = (() => {
     return geo;
   }
 
-  // A puck-like stepping stone: flat top, a clear vertical side wall, and a
-  // chamfered top edge — same lathe-a-profile trick as makeBellGeometry.
-  // Jitter is x/z only and depends only on x/z, so every vertex on the same
-  // vertical line moves together and the wall stays a true vertical cut.
-  function makeStoneGeometry() {
+  // A worn slab stepping stone: big flat-ish top, smoothly rounded down to
+  // the ground — no wall, no hard chamfer edge. Same lathe-a-profile trick
+  // as makeBellGeometry, but takes a seed + side count per call so every
+  // stone gets its own irregular outline instead of sharing one shape at
+  // different scales.
+  function makeStoneGeometry(seedA, seedB, sides) {
+    seedA = seedA === undefined ? 3.7 : seedA;
+    seedB = seedB === undefined ? 8.1 : seedB;
+    sides = sides || 16;
+    // Bottom-to-top, like the other lathe profiles in this file (reversing
+    // this flips face winding and the whole stone culls as backfacing).
+    // The slope from one point to the next roughly doubles each step instead
+    // of jumping straight from a gentle top curve to a steep one — the old
+    // profile had one segment ~7x steeper than its neighbor right where the
+    // flat top met the rounded side, and at low side-counts (12-17) that
+    // single sharp bend rendered as an obviously flat, straight-edged facet
+    // on whichever stone happened to face it toward the camera.
     const profile = [
-      [0.00, 0.00], // center bottom
-      [0.97, 0.00], // flat bottom out to near full radius
-      [1.00, 0.10], // tiny bottom bevel
-      [1.00, 0.68], // vertical wall — the "clear vertical cut"
-      [0.85, 0.92], // top chamfer inward — the "little sharp edge"
-      [0.00, 0.92]  // flat top cap
+      [0.00, 0.00], // centre bottom
+      [0.90, 0.00],
+      [0.97, 0.02],
+      [1.00, 0.08],
+      [1.00, 0.20], // belly — widest point
+      [0.97, 0.50],
+      [0.90, 0.75],
+      [0.80, 0.90],
+      [0.70, 0.97],
+      [0.62, 1.00], // top plateau edge
+      [0.00, 1.00]  // centre of the flat-ish top
     ].map(([rf, hf]) => new THREE.Vector2(rf, hf));
-    let geo = new THREE.LatheGeometry(profile, 11);
+    let geo = new THREE.LatheGeometry(profile, sides);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const r = Math.hypot(x, z);
       if (r < 1e-6) continue;
-      // ±16% — irregular enough that flattened slabs read as natural
-      // pavers, small enough the silhouette survives (boulders use ±30-50%)
-      const j = 1 + (fbm2(x * 1.4 + 3.7, z * 1.4 + 8.1, 2) - 0.5) * 0.32;
+      // jitter, unique seed per stone — reads as an irregular found rock,
+      // not a resized copy of its neighbors
+      const j = 1 + (fbm2(x * 1.3 + seedA, z * 1.3 + seedB, 2) - 0.5) * 0.4;
       pos.setXYZ(i, x * j, y, z * j);
     }
-    // de-index so the chamfer shades as separate facets — shared-vertex
-    // smooth normals would melt the sharp edge right back off
-    geo = geo.toNonIndexed();
+    // smooth shared-vertex normals (no toNonIndexed) — the whole surface
+    // reads as one continuous curve, not a faceted, hard-edged puck
     geo.computeVertexNormals();
     return geo;
   }
@@ -917,10 +973,10 @@ const ThreeScene = (() => {
     const insideRock = (x, z) =>
       rocks.some((r) => Math.hypot(x - r.x, z - r.z) < r.sx * 1.15);
 
-    // ---------- stepping stones: raised faceted pucks along the path ----------
-    // flat top, vertical side wall, chamfered edge (makeStoneGeometry above),
-    // standing proud of the grass instead of melting into it
-    const stoneGeo = makeStoneGeometry();
+    // ---------- stepping stones: worn slabs along the path ----------
+    // each stone below gets its own geometry (unique jitter seed + side
+    // count) so none of them look like a resized copy of another, and each
+    // sits low, half-buried in the dirt (makeStoneGeometry above)
     // arc-length lookup so stones space evenly along the bezier — uniform t
     // bunches them near the ends once the curve bows this much
     const AL_N = 60, alLens = [0];
@@ -951,25 +1007,37 @@ const ThreeScene = (() => {
       // jitter so it doesn't read as a mechanical zigzag either
       const zigzag = (i % 2 === 0 ? 1 : -1) * 0.24;
       const side = zigzag + (hash2(3.3, i) - 0.5) * 0.34;
-      const x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
+      let x = bx + (-dz / dl) * side, z = bz + (dx / dl) * side;
+      if (i === 1) {
+        // nudged further from the camera along the path (position only,
+        // size/jitter/color untouched)
+        const push = 0.2;
+        x += (dx / dl) * push;
+        z += (dz / dl) * push;
+      }
       const s = 0.26 + hash2(7.7, i) * 0.16;
-      stones.push({
-        // flat worn slabs like the reference image: same puck profile but
-        // squashed low and sunk in, so just a thin rounded edge shows —
-        // embedded in the dirt, not standing on it. Sized up from the
-        // original pavers to read as an actual step, not a decal.
-        x, z, y: groundHeight(x, z) - s * 0.06,
-        sx: s, sy: s * 0.34, sz: s * (0.72 + hash2(9.1, i) * 0.45),
+      // buried, but a bit more of the slab shows above the dirt than before
+      const sink = s * 0.16;
+      const stone = {
+        x, z, y: groundHeight(x, z) - sink,
+        sx: s, sy: s * 0.37, sz: s * (0.72 + hash2(9.1, i) * 0.45),
         ry: hash2(5.5, i) * Math.PI * 2,
         // gray stone, a shade cooler and darker than the sandy dirt
         color: new THREE.Color().setHSL(0.08, 0.06, 0.48 + hash2(2.9, i) * 0.10)
-      });
+      };
+      stones.push(stone);
+      // 12-17 sides — round enough to avoid a hexagon look, still varied
+      const sides = 12 + Math.floor(hash2(12.3, i) * 6);
+      const geo = makeStoneGeometry(i * 13.7 + 3.7, i * 9.1 + 8.1, sides);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: stone.color }));
+      mesh.position.set(stone.x, stone.y, stone.z);
+      mesh.rotation.y = stone.ry;
+      mesh.scale.set(stone.sx, stone.sy, stone.sz);
+      mesh.receiveShadow = true;
+      // no castShadow: slabs this flat only smear blurry shadow-map blotches
+      // across the dirt beside them
+      scene.add(mesh);
     }
-    const stoneMesh = place(new THREE.InstancedMesh(
-      stoneGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), stones.length), stones);
-    stoneMesh.receiveShadow = true;
-    // no castShadow: slabs this flat only smear blurry shadow-map blotches
-    // across the dirt beside them
 
     // nothing may grow on top of a stone either
     const insideStone = (x, z) =>
@@ -1003,6 +1071,21 @@ const ThreeScene = (() => {
       { at: [-6.8, 1.4], kind: "rose", n: 9 },
       { at: [3.6, 4.6], kind: "daisy", n: 10 }
     ];
+    // Daisies and roses are wide static props (unlike the old flattened
+    // petal geometry, which was small enough that close placements never
+    // visibly overlapped) — a radius per species (roughly the model's own
+    // canopy half-width, scaled by that instance's random size `s`) so
+    // candidates too close to an already-placed flower get skipped, same
+    // as candidates that land in a rock or on the path.
+    // Farthest any vertex sits from the model's own root (the stem base,
+    // which is what actually gets rotated/placed) — not the bounding-box
+    // half-size, since the root isn't centered in the box (the rose's
+    // base leaves splay further to one side than the other). Every
+    // instance gets a random yaw, so that far side can swing toward any
+    // neighbor; this is the only radius that's safe regardless of which
+    // way it lands.
+    const CANOPY_RADIUS = { daisy: 0.123, rose: 0.16 };
+    const placedCanopies = []; // { x, z, r }
     flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
       for (let i = 0; i < n; i++) {
         const ang = hash2(pi * 11.3, i * 3.1) * Math.PI * 2;
@@ -1012,6 +1095,11 @@ const ThreeScene = (() => {
         const y = groundHeight(x, z);
         const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.55;
         const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
+        if (kind !== "pink") {
+          const r = CANOPY_RADIUS[kind] * s;
+          if (placedCanopies.some((q) => Math.hypot(x - q.x, z - q.z) < (r + q.r) * 0.95)) continue;
+          placedCanopies.push({ x, z, r });
+        }
         if (kind === "pink") {
           // foxglove-style spike: one tall stem carrying 4 small bell
           // florets, bigger near the base and budding smaller toward the tip
@@ -1042,9 +1130,8 @@ const ThreeScene = (() => {
     // loaded models (see below)
     const stemGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.1, 5);
     stemGeo.translate(0, 0.05, 0);
-    const stemMesh = place(new THREE.InstancedMesh(
+    place(new THREE.InstancedMesh(
       stemGeo, new THREE.MeshLambertMaterial({ color: 0x557024 }), pinkStems.length), pinkStems);
-    addWindSway(stemMesh.material, { mode: "stem", strength: 0.55 });
 
     // daisy/rose models are downloaded async — the rest of the scene
     // doesn't wait on them, they just pop in a beat after everything else
@@ -1067,7 +1154,6 @@ const ThreeScene = (() => {
       floretGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
       florets.length), florets);
     floretMesh.castShadow = false; // tiny casters = shadow-map noise
-    addWindSway(floretMesh.material, { mode: "head", strength: 0.55, pinnedHeight: 0.07 });
   }
 
   function buildLighthouse() {

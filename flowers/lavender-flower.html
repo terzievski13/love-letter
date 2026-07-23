@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lavender Sprig</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<style>
+  html, body { margin: 0; height: 100%; background: #dceef5; }
+  three-d-stage:not(:defined) { visibility: hidden; }
+</style>
+</head>
+<body>
+<three-d-stage name="lavender-sprig" background="#dceef5"></three-d-stage>
+<script src="./three-d-stage.js"></script>
+<script type="module">
+const stage = document.querySelector('three-d-stage');
+const { THREE: T } = await stage.ready;
+
+let seed = 5521;
+function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+function rand(min, max) { return min + rnd() * (max - min); }
+
+const materials = {
+  stem: new T.MeshStandardMaterial({ color: 0x2e7a34, roughness: 0.32, metalness: 0 }),
+  stemDark: new T.MeshStandardMaterial({ color: 0x25612a, roughness: 0.32, metalness: 0 }),
+  leaf: new T.MeshStandardMaterial({ color: 0x3c8a3f, roughness: 0.3, metalness: 0, side: T.DoubleSide }),
+  bud: new T.MeshStandardMaterial({ color: 0x8f63c9, roughness: 0.38, metalness: 0 }),
+  budTip: new T.MeshStandardMaterial({ color: 0xa886d9, roughness: 0.38, metalness: 0 }),
+  axilBud: new T.MeshStandardMaterial({ color: 0xaa55c8, roughness: 0.38, metalness: 0 })
+};
+
+// round glossy bead-like bud
+function budMesh(material, size) {
+  const m = new T.Mesh(new T.SphereGeometry(1, 7, 6), material);
+  m.scale.set(size * 0.88, size, size * 0.88);
+  return m;
+}
+
+// tilt: 0 = mesh lies flat/horizontal (points along +Z), PI/2 = stands straight up.
+function placeAround(mesh, angle, radialOffset, heightOffset, tilt) {
+  const holder = new T.Group();
+  mesh.position.set(0, heightOffset, radialOffset);
+  mesh.rotation.x = -tilt;
+  holder.add(mesh);
+  holder.rotation.y = angle;
+  return holder;
+}
+
+// flat lanceolate leaf blade: base at origin, tip along +Z, width along X, thin along Y.
+function leafGeometry(length, width, curve) {
+  const hw = width / 2;
+  const shape = new T.Shape();
+  shape.moveTo(0, 0);
+  shape.quadraticCurveTo(hw * 0.7, length * 0.18, hw, length * 0.42);
+  shape.quadraticCurveTo(hw * 0.35, length * 0.85, 0, length);
+  shape.quadraticCurveTo(-hw * 0.35, length * 0.85, -hw, length * 0.42);
+  shape.quadraticCurveTo(-hw * 0.7, length * 0.18, 0, 0);
+  const geo = new T.ExtrudeGeometry(shape, { depth: width * 0.06, bevelEnabled: false, curveSegments: 10 });
+  geo.translate(0, 0, -width * 0.03);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const t = Math.max(0, Math.min(1, y / length));
+    pos.setZ(i, pos.getZ(i) + Math.sin(t * Math.PI) * curve);
+  }
+  pos.needsUpdate = true;
+  geo.rotateX(Math.PI / 2);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function makeLeaf(length, width, curve) {
+  return new T.Mesh(leafGeometry(length, width, curve), materials.leaf);
+}
+
+function axilBudCluster(size) {
+  const g = new T.Group();
+  const n = 4;
+  for (let i = 0; i < n; i++) {
+    const b = budMesh(materials.axilBud, size * rand(0.7, 1));
+    const a = (i / n) * Math.PI * 2 + rand(-0.3, 0.3);
+    b.position.set(Math.cos(a) * size * 0.4, rand(-0.3, 0.3) * size, Math.sin(a) * size * 0.4);
+    g.add(b);
+  }
+  return g;
+}
+
+// tapered spike of stacked bud whorls, wide at base, narrow at tip
+function makeSpike(baseY, length) {
+  const g = new T.Group();
+  const core = new T.Mesh(new T.CylinderGeometry(0.0035, 0.011, length, 8), materials.stemDark);
+  core.position.y = baseY + length / 2;
+  g.add(core);
+
+  const levels = 8;
+  for (let lvl = 0; lvl < levels; lvl++) {
+    const tFrac = lvl / (levels - 1);
+    const y = baseY + tFrac * length;
+    const taper = 1 - tFrac * 0.85;
+    const count = Math.max(2, Math.round(4 * taper));
+    const coreR = 0.011 * (1 - tFrac) + 0.0035 * tFrac;
+    const budSize = rand(0.019, 0.025) * (0.55 + 0.45 * taper);
+    const mat = tFrac > 0.85 ? materials.budTip : materials.bud;
+    const offset = lvl * 0.6 + rand(-0.1, 0.1);
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + offset;
+      const bud = budMesh(mat, budSize);
+      const holder = new T.Group();
+      holder.add(bud);
+      holder.position.set(0, y + rand(-0.003, 0.003), coreR + budSize * 0.5);
+      const spin = new T.Group();
+      spin.add(holder);
+      spin.rotation.y = a;
+      g.add(spin);
+    }
+  }
+  const cap = budMesh(materials.budTip, 0.013);
+  cap.position.y = baseY + length;
+  g.add(cap);
+
+  const calyx = new T.Mesh(new T.SphereGeometry(0.011, 10, 8), materials.stemDark);
+  calyx.scale.set(1, 0.5, 1);
+  calyx.position.y = baseY - 0.004;
+  g.add(calyx);
+  return g;
+}
+
+function makeStem(stemH, spikeLen, lean) {
+  const g = new T.Group();
+  const stem = new T.Mesh(new T.CylinderGeometry(0.0055, 0.0085, stemH, 8), materials.stem);
+  stem.position.y = stemH / 2;
+  g.add(stem);
+  g.add(makeSpike(stemH, spikeLen));
+  g.rotation.z = lean;
+  return g;
+}
+
+function makeLavender() {
+  const g = new T.Group();
+  g.name = 'lavender';
+
+  // four stems of varying height, fanning out like a bouquet
+  const stems = [
+    { h: 0.30, spike: 0.085, lean: -0.62 },
+    { h: 0.52, spike: 0.165, lean: -0.16 },
+    { h: 0.585, spike: 0.185, lean: 0.01 },
+    { h: 0.475, spike: 0.145, lean: 0.19 }
+  ];
+  stems.forEach((s, i) => {
+    const stem = makeStem(s.h, s.spike, s.lean);
+    stem.name = 'stem' + i;
+    stem.position.x = (i - 1.5) * 0.006;
+    if (i === 0) stem.rotation.y = Math.PI / 3; // smallest stem kicked 60° out of the fan's plane
+    g.add(stem);
+  });
+
+  // broad lance-shaped leaves radiating from the base, layered low-to-high
+  const leafCount = 15;
+  for (let i = 0; i < leafCount; i++) {
+    const angle = (i / leafCount) * Math.PI * 2 + rand(-0.2, 0.2);
+    const length = rand(0.16, 0.29);
+    const width = length * rand(0.14, 0.19);
+    const heightOffset = rand(0.0, 0.05);
+    const tilt = rand(0.25, 0.85);
+    const leaf = makeLeaf(length, width, rand(0.01, 0.025));
+    leaf.name = 'leaf' + i;
+    const holder = placeAround(leaf, angle, 0.014, heightOffset, tilt);
+    g.add(holder);
+  }
+
+  return g;
+}
+
+const lavender = makeLavender();
+lavender.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+stage.setObject(lavender);
+</script>
+</body>
+</html>
