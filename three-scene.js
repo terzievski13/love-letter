@@ -1272,18 +1272,63 @@ const ThreeScene = (() => {
     bctx.fillRect(0, 34, 8, 12);
     const btex = new THREE.CanvasTexture(bc);
     btex.colorSpace = THREE.SRGBColorSpace;
+
+    // Stone plinth the tower stands on — previously the tower rose straight
+    // out of the rock with no transition piece.
+    const ironMat = new THREE.MeshLambertMaterial({ color: 0x2a1e18 });
+    const plinth = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.56, 0.64, 0.32, 14),
+      new THREE.MeshLambertMaterial({ color: 0x8a7460 }) // same stone tone as the mountain rock
+    );
+    plinth.position.y = 1.66;
+    g.add(plinth);
+
     const tower = new THREE.Mesh(
       new THREE.CylinderGeometry(0.34, 0.5, 2.6, 14),
       new THREE.MeshLambertMaterial({ map: btex })
     );
-    tower.position.y = 2.75;
+    tower.position.y = 3.12;
     g.add(tower);
+
+    // Gallery: a flared collar the lantern room stands on, plus a thin
+    // railing ring at its outer edge — the walkway real lighthouses have
+    // just below the light, which the old design (tower straight into a
+    // roof cone) skipped entirely.
+    const gallery = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.60, 0.36, 0.16, 14),
+      ironMat
+    );
+    gallery.position.y = 4.5;
+    g.add(gallery);
+    const railing = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.025, 6, 16), ironMat);
+    railing.rotation.x = Math.PI / 2;
+    railing.position.y = 4.58;
+    g.add(railing);
+
+    // Lantern room: a small glazed housing the light actually sits in,
+    // instead of the roof cone landing directly on the tower.
+    const lantern = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.30, 0.30, 0.42, 10),
+      new THREE.MeshLambertMaterial({ color: 0x3a2e22 })
+    );
+    lantern.position.y = 4.79;
+    g.add(lantern);
+
     const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(0.44, 0.5, 14),
+      new THREE.ConeGeometry(0.40, 0.42, 10),
       new THREE.MeshLambertMaterial({ color: 0x8a3020 })
     );
-    roof.position.y = 4.3;
+    roof.position.y = 5.21;
     g.add(roof);
+    // finial: small ball + spike capping the roof, a finishing touch real
+    // lighthouses have and the old bare cone tip lacked
+    const finialBall = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), ironMat);
+    finialBall.position.y = 5.47;
+    g.add(finialBall);
+    const finialSpike = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.14, 6), ironMat);
+    finialSpike.position.y = 5.61;
+    g.add(finialSpike);
+
     // one warm lit window near the top — a lamp, not a light source
     const lamp = new THREE.Sprite(new THREE.SpriteMaterial({
       map: (() => {
@@ -1302,7 +1347,7 @@ const ThreeScene = (() => {
       })(),
       transparent: true, depthWrite: false
     }));
-    lamp.position.y = 3.95;
+    lamp.position.y = 4.79;
     lamp.scale.set(0.7, 0.7, 1);
     g.add(lamp);
 
