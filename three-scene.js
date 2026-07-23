@@ -441,13 +441,21 @@ const ThreeScene = (() => {
   // 0 on solid land → 1 fully dropped below the water. The land outside a
   // noise-wobbled ellipse dives under the sea — that wrap of water around
   // the grass is what makes it a headland.
+  //
+  // EDGE_SHRINK pulls that whole boundary 30% closer to the mailbox (world
+  // origin) in every direction — scaling x/z by 1/EDGE_SHRINK before the
+  // ellipse/front math is equivalent to scaling the ellipse (center included)
+  // and the front cutoff uniformly around the origin, so the ground is
+  // trimmed evenly rather than just on one side.
+  const EDGE_SHRINK = 0.7;
   function terrainDrop(x, z) {
-    const wob = (fbm2(x / 14 + 40.2, z / 14 + 17.9, 2) - 0.5) * 0.12;
-    const ex = x / 34;
-    const ez = (z - 23) / 32;
+    const xe = x / EDGE_SHRINK, ze = z / EDGE_SHRINK;
+    const wob = (fbm2(xe / 14 + 40.2, ze / 14 + 17.9, 2) - 0.5) * 0.12;
+    const ex = xe / 34;
+    const ez = (ze - 23) / 32;
     const d = Math.sqrt(ex * ex + ez * ez) + wob;
     const edge = sstep(0.95, 1.28, d);
-    const front = sstep(-9, -18, z); // steeper drop past the old z=-10 shore line
+    const front = sstep(-9, -18, ze); // steeper drop past the old z=-10 shore line
     return Math.max(edge, front);
   }
 
@@ -1029,9 +1037,12 @@ const ThreeScene = (() => {
       [-2.4, 2.7, [0.24, 0, 0], [0.13, -0.34, 0.18]],                     // path left (moved off the widened path)
       [3.3, 1.8, [0.20, 0, 0]],                                           // near the crest
       [-3.9, 0.8, [0.38, 0, 0], [0.19, 0.5, 0.3]],                        // left flank
-      [-5.6, -6.9, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
-      [5.3, -6.3, [0.42, 0, 0], [0.22, -0.42, 0.28]],
-      [-2.0, -7.2, [0.28, 0, 0]],
+      // cliff-lip groups: anchor scaled by EDGE_SHRINK (0.7) to follow the
+      // trimmed shoreline in, so they still sit right at the lip instead of
+      // floating out over the now-closer water
+      [-3.92, -4.83, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
+      [3.71, -4.41, [0.42, 0, 0], [0.22, -0.42, 0.28]],
+      [-1.4, -5.04, [0.28, 0, 0]],
       [7.0, -1.5, [0.34, 0, 0], [0.18, 0.44, -0.2]]
     ];
     const rocks = [];
@@ -1151,14 +1162,17 @@ const ThreeScene = (() => {
       { at: [5.4, 3.0], kind: "rose", n: 10 },     // by the big right anchor
       { at: [-3.2, 2.0], kind: "daisy", n: 12 },
       { at: [2.6, -2.8], kind: "daisy", n: 12 },
-      { at: [-1.6, -5.6], kind: "rose", n: 10 },
-      { at: [-4.9, -6.0], kind: "daisy", n: 12 },  // cliff-lip rocks
-      { at: [4.8, -5.5], kind: "daisy", n: 10 },
+      // cliff/crest-lip clusters: anchor scaled by EDGE_SHRINK (0.7), same
+      // as the cliff-lip rocks, so they stay right at the trimmed edge
+      // instead of sitting out past it
+      { at: [-1.12, -3.92], kind: "rose", n: 10 },
+      { at: [-3.43, -4.2], kind: "daisy", n: 12 },  // cliff-lip rocks
+      { at: [3.36, -3.85], kind: "daisy", n: 10 },
       { at: [-6.2, -3.4], kind: "cosmos", n: 8 },
       { at: [6.6, -0.6], kind: "daisy", n: 12 },
       { at: [0.8, 2.9], kind: "rose", n: 9 },     // right where the path crests
       { at: [-2.1, 5.4], kind: "lavender", n: 7 },
-      { at: [1.5, -6.3], kind: "daisy", n: 10 },   // crest lip, breaks horizon
+      { at: [1.05, -4.41], kind: "daisy", n: 10 },   // crest lip, breaks horizon
       { at: [-6.8, 1.4], kind: "rose", n: 9 },
       { at: [3.6, 4.6], kind: "daisy", n: 10 },
       { at: [5.6, -4.6], kind: "cosmos", n: 7 },
