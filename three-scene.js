@@ -216,7 +216,7 @@ const ThreeScene = (() => {
         // targets this exact point (not just a fixed direction) so it
         // visibly converges toward the real sun as the camera moves,
         // instead of looking like a decal painted on the water
-        uSunPos: { value: new THREE.Vector3(-75, 3, -130) }
+        uSunPos: { value: new THREE.Vector3(-95, 3, -130) }
       }
     ]);
     const water = new THREE.Mesh(
@@ -392,7 +392,7 @@ const ThreeScene = (() => {
       map: glowTexture([[0, "rgba(255,205,150,0.55)"], [0.45, "rgba(255,190,130,0.22)"], [1, "rgba(255,190,130,0)"]]),
       transparent: true, depthWrite: false, fog: false
     }));
-    halo.position.set(-75, 6, -131);
+    halo.position.set(-95, 6, -131);
     halo.scale.set(46, 46, 1);
     scene.add(halo);
 
@@ -400,7 +400,7 @@ const ThreeScene = (() => {
       map: glowTexture([[0, "rgba(255,246,221,1)"], [0.35, "rgba(255,228,175,0.95)"], [0.55, "rgba(255,205,145,0.30)"], [1, "rgba(255,205,145,0)"]]),
       transparent: true, depthWrite: false, fog: false
     }));
-    sun.position.set(-75, 2.8, -130);
+    sun.position.set(-95, 2.8, -130);
     sun.scale.set(14, 14, 1);
     scene.add(sun);
   }
