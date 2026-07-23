@@ -691,37 +691,9 @@ const ThreeScene = (() => {
     ranges.forEach(makeRange);
   }
 
-  // Bake N transformed copies of a base geometry into one BufferGeometry.
-  // There's no BufferGeometryUtils here (this project loads bare
-  // three.min.js, no examples/jsm addons), so this is the merge by hand —
-  // done once at scene build time, not per frame.
-  function mergeInstances(baseGeo, matrices) {
-    const positions = [], normals = [], indices = [];
-    const posAttr = baseGeo.attributes.position, normAttr = baseGeo.attributes.normal;
-    const idx = baseGeo.index;
-    const p = new THREE.Vector3(), n = new THREE.Vector3();
-    let vOffset = 0;
-    matrices.forEach((m) => {
-      const nm = new THREE.Matrix3().getNormalMatrix(m);
-      for (let i = 0; i < posAttr.count; i++) {
-        p.fromBufferAttribute(posAttr, i).applyMatrix4(m);
-        n.fromBufferAttribute(normAttr, i).applyMatrix3(nm).normalize();
-        positions.push(p.x, p.y, p.z);
-        normals.push(n.x, n.y, n.z);
-      }
-      for (let i = 0; i < idx.count; i++) indices.push(idx.getX(i) + vOffset);
-      vOffset += posAttr.count;
-    });
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-    geo.setIndex(indices);
-    return geo;
-  }
-
-  // Same idea as mergeInstances, but for baking a *set of different* parts
-  // (each with its own geometry) into one static geometry — used to
-  // flatten a loaded GLTF flower's many small meshes of one color (stem,
+  // Bakes a set of different parts (each with its own geometry) into one
+  // static geometry — used to flatten a loaded GLTF flower's many small
+  // meshes of one color (stem,
   // petals, etc.) into a single shape InstancedMesh can replicate cheaply.
   // Reads .getX/Y/Z off whatever BufferAttribute is handed in and .elements
   // off whatever Matrix4 is handed in, both plain-data reads, so this
@@ -756,20 +728,19 @@ const ThreeScene = (() => {
     return geo;
   }
 
-  // Loads a GLTF flower prop (rooted at the base of its stem, like the
-  // procedural stem geometry is) and flattens it into one merged geometry
-  // per material/color — e.g. a daisy comes back as [stem+leaves(green),
-  // petals(cream), center+florets(orange)]. Every returned geometry shares
-  // the model's own local space, so a single wind-sway patch keyed off
-  // local Y bends the whole flower (stem, petals, everything) as one piece.
-  async function loadFlowerModel(url) {
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-    const gltf = await new Promise((resolve, reject) =>
-      new GLTFLoader().load(url, resolve, undefined, reject));
-    const scene3 = gltf.scene;
-    scene3.updateMatrixWorld(true);
+  // Flattens any Object3D tree (a loaded GLTF scene, or a plain THREE.Group
+  // built by hand) into one merged geometry per material/color — e.g. a
+  // daisy comes back as [stem+leaves(green), petals(cream),
+  // center+florets(orange)]. Every returned geometry shares the root's own
+  // local space, so a single wind-sway patch keyed off local Y bends the
+  // whole flower (stem, petals, everything) as one piece. Reads plain
+  // .attributes/.index/.elements off whatever geometry/material it's handed,
+  // so it works equally well on GLTFLoader's module-THREE objects and this
+  // file's own classic-THREE meshes.
+  function flattenModelToParts(root) {
+    root.updateMatrixWorld(true);
     const groups = new Map(); // material.uuid -> { color, parts }
-    scene3.traverse((obj) => {
+    root.traverse((obj) => {
       if (!obj.isMesh) return;
       const key = obj.material.uuid;
       if (!groups.has(key)) groups.set(key, { color: obj.material.color, parts: [] });
@@ -779,6 +750,161 @@ const ThreeScene = (() => {
       color: new THREE.Color(color.r, color.g, color.b),
       geometry: mergeGeometryList(parts)
     }));
+  }
+
+  // Loads a GLTF flower prop (rooted at the base of its stem, like the
+  // procedural stem geometry is) and flattens it via flattenModelToParts.
+  async function loadFlowerModel(url) {
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const gltf = await new Promise((resolve, reject) =>
+      new GLTFLoader().load(url, resolve, undefined, reject));
+    return flattenModelToParts(gltf.scene);
+  }
+
+  // Lavender sprig, built procedurally instead of loaded from a file —
+  // flowers/lavender-flower.html is a standalone generator/preview page
+  // (ported 1:1 below: four fanned stems, each a tapered spike of stacked
+  // bud whorls, plus radiating lance-shaped leaves) rather than an exported
+  // .glb like the other three species, since it was only ever run in its
+  // own preview page. A local seeded LCG (same seed the source page used)
+  // keeps the one-time bake deterministic across reloads, same as every
+  // other hash-seeded shape in this file. Returned via flattenModelToParts
+  // so it slots into buildFlowerSpecies exactly like a loaded model.
+  function buildLavenderModel() {
+    let seed = 5521;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    function rand(min, max) { return min + rnd() * (max - min); }
+
+    const materials = {
+      stem: new THREE.MeshLambertMaterial({ color: 0x2e7a34 }),
+      stemDark: new THREE.MeshLambertMaterial({ color: 0x25612a }),
+      leaf: new THREE.MeshLambertMaterial({ color: 0x3c8a3f, side: THREE.DoubleSide }),
+      bud: new THREE.MeshLambertMaterial({ color: 0x8f63c9 }),
+      budTip: new THREE.MeshLambertMaterial({ color: 0xa886d9 })
+    };
+
+    function budMesh(material, size) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 6), material);
+      m.scale.set(size * 0.88, size, size * 0.88);
+      return m;
+    }
+
+    // tilt: 0 = mesh lies flat/horizontal (points along +Z), PI/2 = stands straight up.
+    function placeAround(mesh, angle, radialOffset, heightOffset, tilt) {
+      const holder = new THREE.Group();
+      mesh.position.set(0, heightOffset, radialOffset);
+      mesh.rotation.x = -tilt;
+      holder.add(mesh);
+      holder.rotation.y = angle;
+      return holder;
+    }
+
+    // flat lanceolate leaf blade: base at origin, tip along +Z, width along X, thin along Y.
+    function leafGeometry(length, width, curve) {
+      const hw = width / 2;
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0);
+      shape.quadraticCurveTo(hw * 0.7, length * 0.18, hw, length * 0.42);
+      shape.quadraticCurveTo(hw * 0.35, length * 0.85, 0, length);
+      shape.quadraticCurveTo(-hw * 0.35, length * 0.85, -hw, length * 0.42);
+      shape.quadraticCurveTo(-hw * 0.7, length * 0.18, 0, 0);
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: width * 0.06, bevelEnabled: false, curveSegments: 10 });
+      geo.translate(0, 0, -width * 0.03);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = Math.max(0, Math.min(1, y / length));
+        pos.setZ(i, pos.getZ(i) + Math.sin(t * Math.PI) * curve);
+      }
+      pos.needsUpdate = true;
+      geo.rotateX(Math.PI / 2);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function makeLeaf(length, width, curve) {
+      return new THREE.Mesh(leafGeometry(length, width, curve), materials.leaf);
+    }
+
+    // tapered spike of stacked bud whorls, wide at base, narrow at tip
+    function makeSpike(baseY, length) {
+      const g = new THREE.Group();
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.011, length, 8), materials.stemDark);
+      core.position.y = baseY + length / 2;
+      g.add(core);
+
+      const levels = 8;
+      for (let lvl = 0; lvl < levels; lvl++) {
+        const tFrac = lvl / (levels - 1);
+        const y = baseY + tFrac * length;
+        const taper = 1 - tFrac * 0.85;
+        const count = Math.max(2, Math.round(4 * taper));
+        const coreR = 0.011 * (1 - tFrac) + 0.0035 * tFrac;
+        const budSize = rand(0.019, 0.025) * (0.55 + 0.45 * taper);
+        const mat = tFrac > 0.85 ? materials.budTip : materials.bud;
+        const offset = lvl * 0.6 + rand(-0.1, 0.1);
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + offset;
+          const bud = budMesh(mat, budSize);
+          const holder = new THREE.Group();
+          holder.add(bud);
+          holder.position.set(0, y + rand(-0.003, 0.003), coreR + budSize * 0.5);
+          const spin = new THREE.Group();
+          spin.add(holder);
+          spin.rotation.y = a;
+          g.add(spin);
+        }
+      }
+      const cap = budMesh(materials.budTip, 0.013);
+      cap.position.y = baseY + length;
+      g.add(cap);
+
+      const calyx = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), materials.stemDark);
+      calyx.scale.set(1, 0.5, 1);
+      calyx.position.y = baseY - 0.004;
+      g.add(calyx);
+      return g;
+    }
+
+    function makeStem(stemH, spikeLen, lean) {
+      const g = new THREE.Group();
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0085, stemH, 8), materials.stem);
+      stem.position.y = stemH / 2;
+      g.add(stem);
+      g.add(makeSpike(stemH, spikeLen));
+      g.rotation.z = lean;
+      return g;
+    }
+
+    const g = new THREE.Group();
+    // four stems of varying height, fanning out like a bouquet
+    const stems = [
+      { h: 0.30, spike: 0.085, lean: -0.62 },
+      { h: 0.52, spike: 0.165, lean: -0.16 },
+      { h: 0.585, spike: 0.185, lean: 0.01 },
+      { h: 0.475, spike: 0.145, lean: 0.19 }
+    ];
+    stems.forEach((s, i) => {
+      const stem = makeStem(s.h, s.spike, s.lean);
+      stem.position.x = (i - 1.5) * 0.006;
+      if (i === 0) stem.rotation.y = Math.PI / 3; // smallest stem kicked 60° out of the fan's plane
+      g.add(stem);
+    });
+
+    // broad lance-shaped leaves radiating from the base, layered low-to-high
+    const leafCount = 15;
+    for (let i = 0; i < leafCount; i++) {
+      const angle = (i / leafCount) * Math.PI * 2 + rand(-0.2, 0.2);
+      const length = rand(0.16, 0.29);
+      const width = length * rand(0.14, 0.19);
+      const heightOffset = rand(0.0, 0.05);
+      const tilt = rand(0.25, 0.85);
+      const leaf = makeLeaf(length, width, rand(0.01, 0.025));
+      const holder = placeAround(leaf, angle, 0.014, heightOffset, tilt);
+      g.add(holder);
+    }
+
+    return flattenModelToParts(g);
   }
 
   // Instances one loaded flower model (see loadFlowerModel) across a
@@ -802,50 +928,9 @@ const ThreeScene = (() => {
     });
   }
 
-  // A real 3D flower head: `petals` rounded, flattened-ellipsoid petals
-  // (base at the flower centre, tip pointing outward) fanned evenly around
-  // Y and tilted up by `tilt`, merged into one static geometry so it can
-  // still be instanced cheaply. `jitter` (via hash2, so it's stable across
-  // reloads like everything else placed in this function) breaks up the
-  // perfect radial symmetry so it doesn't read as a machine part.
-  function makePetalFlowerGeometry({ petals, length, width, thickness, tilt, jitter, seed }) {
-    const petalGeo = new THREE.SphereGeometry(1, 8, 6);
-    petalGeo.scale(width, thickness, length);
-    petalGeo.translate(0, 0, length); // base at local origin, tip at +Z
-    const matrices = [];
-    for (let i = 0; i < petals; i++) {
-      const theta = (i / petals) * Math.PI * 2 + (hash2(seed, i * 3.1) - 0.5) * jitter;
-      const t = tilt + (hash2(seed + 5.5, i * 1.7) - 0.5) * jitter * 0.6;
-      matrices.push(new THREE.Matrix4().makeRotationY(theta).multiply(new THREE.Matrix4().makeRotationX(-t)));
-    }
-    return mergeInstances(petalGeo, matrices);
-  }
-
-  // A small smooth bell/trumpet (a lathe revolve with a gently scalloped
-  // rim) — used for the pink-spike florets, where a tube shape is correct
-  // rather than discrete petals. `profile` is a list of
-  // [radiusFraction, heightFraction] pairs from centre to rim, scaled by
-  // `radius`.
-  function makeBellGeometry({ radius, petals, profile, scallop }) {
-    const pts = profile.map(([rf, hf]) => new THREE.Vector2(rf * radius, hf * radius));
-    const geo = new THREE.LatheGeometry(pts, petals * 6);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-      const r = Math.hypot(x, z);
-      if (r < 1e-6) continue;
-      const wave = Math.cos(Math.atan2(z, x) * petals);
-      const rf = 1 + wave * scallop * (r / radius); // scallop bites near the rim, not the centre
-      pos.setXYZ(i, x * rf, y, z * rf);
-    }
-    pos.needsUpdate = true;
-    geo.computeVertexNormals();
-    return geo;
-  }
-
   // A worn slab stepping stone: big flat-ish top, smoothly rounded down to
   // the ground — no wall, no hard chamfer edge. Same lathe-a-profile trick
-  // as makeBellGeometry, but takes a seed + side count per call so every
+  // used elsewhere in this file, but takes a seed + side count per call so every
   // stone gets its own irregular outline instead of sharing one shape at
   // different scales.
   function makeStoneGeometry(seedA, seedB, sides) {
@@ -1043,14 +1128,20 @@ const ThreeScene = (() => {
     const insideStone = (x, z) =>
       stones.some((st) => Math.hypot(x - st.x, z - st.z) < st.sx * 1.15);
 
-    // ---------- flowers: daisy drifts + roses + pink spikes ----------
-    // daisies and roses are loaded GLTF props (see loadFlowerModel,
-    // buildFlowerSpecies below — replaced the old procedural
-    // makePetalFlowerGeometry heads for these two). Pink foxglove spikes
-    // are still procedural lathe-turned bells (see makeBellGeometry).
-    const pinkStems = [], florets = [], daisyPlacements = [], rosePlacements = [];
+    // ---------- flowers: daisy, rose, cosmos + lavender drifts ----------
+    // All four species are real props flattened into merged geometry (see
+    // flattenModelToParts) — daisy/rose/cosmos loaded from flowers/*.glb,
+    // lavender built procedurally by buildLavenderModel (ported from
+    // flowers/lavender-flower.html, which was never exported to a .glb).
+    // Replaces the old reddish procedural foxglove spike, which didn't
+    // match any of the four modeled species and read as out of place.
+    const daisyPlacements = [], rosePlacements = [], cosmosPlacements = [], lavenderPlacements = [];
+    const PLACEMENTS = { daisy: daisyPlacements, rose: rosePlacements, cosmos: cosmosPlacements, lavender: lavenderPlacements };
     // cluster centers on the knoll flanks (heaviest beside the path, like
-    // the board), near the big rocks, along the cliff lip inner side
+    // the board), near the big rocks, along the cliff lip inner side —
+    // cosmos and lavender get two modest clusters each so they read as
+    // occasional accents among the daisy/rose drifts, not another dominant
+    // species.
     const flowerClusters = [
       { at: pathSide(0.25, 1.4), kind: "daisy", n: 13 },
       { at: pathSide(0.5, -1.5), kind: "daisy", n: 12 },
@@ -1063,15 +1154,17 @@ const ThreeScene = (() => {
       { at: [-1.6, -5.6], kind: "rose", n: 10 },
       { at: [-4.9, -6.0], kind: "daisy", n: 12 },  // cliff-lip rocks
       { at: [4.8, -5.5], kind: "daisy", n: 10 },
-      { at: [-6.2, -3.4], kind: "pink", n: 7 },
+      { at: [-6.2, -3.4], kind: "cosmos", n: 8 },
       { at: [6.6, -0.6], kind: "daisy", n: 12 },
       { at: [0.8, 2.9], kind: "rose", n: 9 },     // right where the path crests
-      { at: [-2.1, 5.4], kind: "pink", n: 7 },
+      { at: [-2.1, 5.4], kind: "lavender", n: 7 },
       { at: [1.5, -6.3], kind: "daisy", n: 10 },   // crest lip, breaks horizon
       { at: [-6.8, 1.4], kind: "rose", n: 9 },
-      { at: [3.6, 4.6], kind: "daisy", n: 10 }
+      { at: [3.6, 4.6], kind: "daisy", n: 10 },
+      { at: [5.6, -4.6], kind: "cosmos", n: 7 },
+      { at: [5.0, 4.4], kind: "lavender", n: 6 }
     ];
-    // Daisies and roses are wide static props (unlike the old flattened
+    // All four species are wide static props (unlike the old flattened
     // petal geometry, which was small enough that close placements never
     // visibly overlapped) — a radius per species (roughly the model's own
     // canopy half-width, scaled by that instance's random size `s`) so
@@ -1084,7 +1177,7 @@ const ThreeScene = (() => {
     // instance gets a random yaw, so that far side can swing toward any
     // neighbor; this is the only radius that's safe regardless of which
     // way it lands.
-    const CANOPY_RADIUS = { daisy: 0.123, rose: 0.16 };
+    const CANOPY_RADIUS = { daisy: 0.123, rose: 0.16, cosmos: 0.15, lavender: 0.09 };
     const placedCanopies = []; // { x, z, r }
     flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
       for (let i = 0; i < n; i++) {
@@ -1095,65 +1188,34 @@ const ThreeScene = (() => {
         const y = groundHeight(x, z);
         const s = 0.75 + hash2(pi * 2.2, i * 9.4) * 0.55;
         const lean = (hash2(pi * 5.1, i * 1.8) - 0.5) * 0.2;
-        if (kind !== "pink") {
-          const r = CANOPY_RADIUS[kind] * s;
-          if (placedCanopies.some((q) => Math.hypot(x - q.x, z - q.z) < (r + q.r) * 0.95)) continue;
-          placedCanopies.push({ x, z, r });
-        }
-        if (kind === "pink") {
-          // foxglove-style spike: one tall stem carrying 4 small bell
-          // florets, bigger near the base and budding smaller toward the tip
-          const spikeH = 0.34 * s;
-          pinkStems.push({ x, z, y, sx: 1, sy: spikeH * 2.8, sz: 1, rz: lean });
-          const floretN = 4;
-          for (let f = 0; f < floretN; f++) {
-            const t = f / (floretN - 1); // 0 at base, 1 at tip
-            const side = f % 2 === 0 ? 1 : -1; // alternate sides, like a real spike
-            florets.push({
-              x: x + lean * spikeH * t + side * 0.02, z: z + side * 0.008,
-              y: y + spikeH * 0.55 * (0.25 + t * 0.9),
-              sx: 1 - t * 0.4, sy: 1 - t * 0.4, sz: 1 - t * 0.4,
-              rx: side * 0.9, ry: hash2(pi, f * 3.3) * Math.PI * 2, rz: lean,
-              color: new THREE.Color(0xc8699c)
-            });
-          }
-          continue;
-        }
+        const r = CANOPY_RADIUS[kind] * s;
+        if (placedCanopies.some((q) => Math.hypot(x - q.x, z - q.z) < (r + q.r) * 0.95)) continue;
+        placedCanopies.push({ x, z, r });
         // random yaw so every instance of the (identical) loaded model
         // doesn't face the same way
         const ry = hash2(pi * 3.7, i * 6.3) * Math.PI * 2;
-        (kind === "daisy" ? daisyPlacements : rosePlacements).push({ x, y, z, s, rz: lean, ry });
+        PLACEMENTS[kind].push({ x, y, z, s, rz: lean, ry });
       }
     });
 
-    // pink spike stems only now — daisy/rose stems come from their own
-    // loaded models (see below)
-    const stemGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.1, 5);
-    stemGeo.translate(0, 0.05, 0);
-    place(new THREE.InstancedMesh(
-      stemGeo, new THREE.MeshLambertMaterial({ color: 0x557024 }), pinkStems.length), pinkStems);
-
-    // daisy/rose models are downloaded async — the rest of the scene
-    // doesn't wait on them, they just pop in a beat after everything else
+    // daisy/rose/cosmos models are downloaded async — the rest of the
+    // scene doesn't wait on them, they just pop in a beat after everything
+    // else. Lavender is built procedurally so it's ready immediately, but
+    // is instanced alongside the others here for one consistent pop-in.
     Promise.all([
       loadFlowerModel("flowers/daisy-flower.glb"),
-      loadFlowerModel("flowers/rose-flower.glb")
-    ]).then(([daisyParts, roseParts]) => {
+      loadFlowerModel("flowers/rose-flower.glb"),
+      loadFlowerModel("flowers/cosmos-flower.glb")
+    ]).then(([daisyParts, roseParts, cosmosParts]) => {
       // scale each model's native size down to roughly the footprint the
       // old procedural flowers had, so cluster density/composition doesn't
-      // suddenly change — easy to retune once seen live
+      // suddenly change — easy to retune once seen live. Native heights
+      // (denominators) are each model's own loaded bounding-box height.
       buildFlowerSpecies(daisyParts, daisyPlacements, 0.15 / 0.3242);
       buildFlowerSpecies(roseParts, rosePlacements, 0.16 / 0.2882);
+      buildFlowerSpecies(cosmosParts, cosmosPlacements, 0.24 / 0.3702);
+      buildFlowerSpecies(buildLavenderModel(), lavenderPlacements, 0.4 / 0.77);
     }).catch((e) => console.error("flower model load failed", e));
-
-    const floretGeo = makeBellGeometry({
-      radius: 0.018, petals: 5, scallop: 0.16,
-      profile: [[0, 0], [0.3, 0.55], [0.7, 0.85], [1, 0.72]]
-    });
-    const floretMesh = place(new THREE.InstancedMesh(
-      floretGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
-      florets.length), florets);
-    floretMesh.castShadow = false; // tiny casters = shadow-map noise
   }
 
   function buildLighthouse() {
