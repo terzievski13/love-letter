@@ -197,10 +197,14 @@ const ThreeScene = (() => {
     // from a single fragment shader:
     //   - color ramp: same four stops as the old canvas gradient, blended
     //     by world-space distance instead of a baked texture
-    //   - ripples: a small sum of traveling sine waves, read as a fake
-    //     bump normal (via their analytic slope) rather than displacing
-    //     actual geometry — the plane has no subdivisions, so all of the
-    //     "wave" look is a per-pixel lighting trick, not real motion
+    //   - ripples: two slow traveling waves, read as a fake bump normal
+    //     (via their analytic slope) rather than displacing actual
+    //     geometry — the plane has no subdivisions, so all of the "wave"
+    //     look is a per-pixel lighting trick, not real motion. Deliberately
+    //     the plainest part of this shader: an earlier version added a
+    //     whole second layer of dashed "distant swell" streaks on top,
+    //     which read as ruled paper instead of water, so it's gone —
+    //     these two waves are the entire wave simulation now.
     //   - glitter: a Blinn-Phong-style specular toward the real sun
     //     position, broken into individual twinkling grains (a hashed
     //     on/off grid re-rolled a few times a second) instead of one
@@ -265,20 +269,18 @@ const ThreeScene = (() => {
             float t = clamp((vWorldPos.z + 300.0) / 400.0, 0.0, 1.0);
             vec3 baseColor = colorRamp(t);
 
-            // three slow traveling waves at odd angles (not axis-aligned,
-            // so the pattern doesn't read as a grid) — read only as an
-            // analytic slope, never as real displacement
+            // two slow traveling waves at an angle to each other (not
+            // axis-aligned, so the pattern doesn't read as a grid) — read
+            // only as an analytic slope, never as real displacement
             vec2 p = vWorldPos.xz;
             vec2 dir1 = normalize(vec2(0.7, 0.3));
             vec2 dir2 = normalize(vec2(-0.4, 0.9));
-            vec2 dir3 = normalize(vec2(0.9, -0.4));
-            float f1 = 0.35; float f2 = 0.6; float f3 = 1.3;
-            float s1 = 0.35; float s2 = -0.25; float s3 = 0.5;
-            float a1 = 0.12; float a2 = 0.08; float a3 = 0.05;
+            float f1 = 0.35; float f2 = 0.6;
+            float s1 = 0.35; float s2 = -0.25;
+            float a1 = 0.12; float a2 = 0.08;
 
             vec2 grad = cos(dot(p, dir1) * f1 + uTime * s1) * f1 * dir1 * a1
-                      + cos(dot(p, dir2) * f2 + uTime * s2) * f2 * dir2 * a2
-                      + cos(dot(p, dir3) * f3 + uTime * s3) * f3 * dir3 * a3;
+                      + cos(dot(p, dir2) * f2 + uTime * s2) * f2 * dir2 * a2;
             vec3 bumpNormal = normalize(vec3(-grad.x, 1.0, -grad.y));
 
             // a whisper of brightness variation from the same waves so the
@@ -286,43 +288,6 @@ const ThreeScene = (() => {
             float heightSum = sin(dot(p, dir1) * f1 + uTime * s1) * a1
                              + sin(dot(p, dir2) * f2 + uTime * s2) * a2;
             baseColor *= 1.0 + heightSum * 0.05;
-
-            // distant wave streaks: thin horizontal lines that travel
-            // toward shore (perpendicular to their own length), the way
-            // real distant swell rolls in toward the beach. The line
-            // positions are what move now — rowPhase carries -uTime so
-            // the bands travel in +z (toward the camera/shore) — while
-            // the dash/gap pattern along each line's length (built from
-            // x only, no uTime) stays put relative to its line, riding
-            // along with it instead of sliding sideways on its own.
-            // Fragment-only, so it can never leave the water mesh.
-            //
-            // Two things made this look too stiff: perfectly even spacing
-            // (a plain sine gives every band the same gap) and every band
-            // showing up at full strength. Domain-warp the y input with a
-            // couple of slow, mismatched sines before computing the band
-            // phase so the lines bend and the spacing breathes instead of
-            // reading as ruled paper, and randomly mute roughly half the
-            // rows entirely so streaks appear at irregular intervals.
-            float warp = sin(p.x * 0.03 + p.y * 0.017) * 2.4
-                       + sin(p.y * 0.021 - p.x * 0.011) * 1.6;
-            float rowPhase = (p.y + warp) * 0.4 + p.x * 0.05 - uTime * 0.28;
-            float rowMask = pow(max(sin(rowPhase), 0.0), 16.0);
-            float rowId = floor(rowPhase / 6.2832);
-            float rowHashA = hash(vec2(rowId, 1.7));
-            float rowHashB = hash(vec2(rowId, 4.2));
-            float rowHashC = hash(vec2(rowId, 7.9));
-            float rowVisible = step(0.45, rowHashC);
-            // longer wavelength than before (0.05–0.14 vs a fixed 0.3) so
-            // each bright dash covers more distance, and both the
-            // wavelength and the on/off ratio are randomized per row —
-            // no two streaks are the same length
-            float freqX = mix(0.05, 0.14, rowHashA);
-            float streakPhase = p.x * freqX + rowHashA * 6.2832;
-            float onThreshold = mix(-0.4, 0.3, rowHashB);
-            float streakShimmer = smoothstep(onThreshold, onThreshold + 0.5, sin(streakPhase));
-            float streak = rowMask * streakShimmer * rowVisible;
-            baseColor = mix(baseColor, vec3(0.92, 0.97, 1.0), streak * 0.14);
 
             // specular toward the sun's actual position (not just a fixed
             // direction) — targeting the real point makes the glint
