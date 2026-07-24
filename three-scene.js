@@ -999,7 +999,7 @@ const ThreeScene = (() => {
       [-5.0, 4.6, [0.72, 0, 0], [0.34, 0.85, 0.5], [0.20, -0.66, 0.42]],  // big left anchor
       [6.1, 3.9, [0.58, 0, 0], [0.28, -0.64, 0.3]],                       // big right anchor
       [1.9, 4.8, [0.28, 0, 0], [0.15, 0.42, 0.22]],                       // path right
-      [-2.4, 2.7, [0.24, 0, 0], [0.13, -0.34, 0.18]],                     // path left (moved off the widened path)
+      [4.45, 1.00, [0.24, 0, 0], [0.13, -0.34, 0.18]],                    // moved right of mailbox per user's marked screenshot
       [3.3, 1.8, [0.20, 0, 0]],                                           // near the crest
       [-3.9, 0.8, [0.38, 0, 0], [0.19, 0.5, 0.3]],                        // left flank
       // cliff-lip groups: pulled in further still (0.7x on top of the
@@ -1008,9 +1008,10 @@ const ThreeScene = (() => {
       // breathing room from the water even though the ground under them
       // is solid either way (terrainDrop is ~0 at both positions)
       [-2.74, -3.38, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
-      [2.60, -3.09, [0.42, 0, 0], [0.22, -0.42, 0.28]],
-      [-0.98, -3.53, [0.28, 0, 0]],
-      [7.0, -1.5, [0.34, 0, 0], [0.18, 0.44, -0.2]]
+      [2.60, -3.09, [0.42, 0, 0], [0.22, -0.42, 0.28]]
+      // [-0.98, -3.53] rock (right of mailbox) and [7.0, -1.5] rock
+      // (bottom-right, peeking through the rose flowers) removed per
+      // user's marked screenshot
     ];
     const rocks = [];
     rockGroups.forEach(([gx, gz, ...members], gi) => {
