@@ -16,38 +16,6 @@ const LETTERS_DATA = /*EDITMODE-BEGIN*/{
       "envelopeColor": "#e8d4b8",
       "wax": "#7a5a8a",
       "body": "Скъпа моя, досега не съм ти писал писмо. Или поне не съм го пращал по пощата. Днес, това се променя. Това е пощенска кутия от бъдещето. Нещата се случват мигновенно и по-важното, без пострадали гълъби.\n\nСлед като минахме през скучната част, трябва да ти кажа една тайна… Четеш ли внимателно?!\n\n…\n\nОбичам те! Много! И съм благодарен, че мога да те прегърна, целуна… пауза… Завърти се наляво. Ако не съм ти от ляво, значи надясно… Сега след като вече съм те целунал (надявам се), можеш да продължиш да четеш.\n\nВ тази пощенска кутия, направена само за теб, ти ще получаваш своята поща. Не точно всъщност. Не би трябвало да има глоби или покани за официални събития в нея (макар да може да се уреди), а по-скоро аз ще ти изпращам писма. Писма, изпълнени с моите чувства към теб (или просто с глупости, в зависимост от настроението ми). \n\nВече си запозната с общата идея и знаеш защо седя до теб в очакване, сякаш аз ще получавам подарък (не съм сигурен дали ще ти хареса, но пък се надявам искрено).\n\nА да подарък ли казах?\n\nОпа, май се издадох!\n\n…\n\n(Отвори другото писмо)"
-    },
-    {
-      "id": 3,
-      "date": "May 1, 2026",
-      "title": "A small thing",
-      "envelopeColor": "#f0c8b0",
-      "wax": "#c87a4a",
-      "body": "My darling,\n\nI noticed something this week — the way you laugh when you think no one's looking. It's softer. Slower. Like the laugh is just for you.\n\nI hope I get to hear that one for the rest of my life.\n\nAll of me,\nMe"
-    },
-    {
-      "id": 4,
-      "date": "May 4, 2026",
-      "title": "When you're far",
-      "envelopeColor": "#dcc7a3",
-      "wax": "#5a7a6a",
-      "body": "Sweet thing,\n\nDistance is strange. It makes the small things bigger — your voice on the phone, a photo I've already seen ten times, the thought of you reading this.\n\nI'm counting the days. They're going faster than they feel.\n\nYours always,\nMe"
-    },
-    {
-      "id": 5,
-      "date": "Whenever",
-      "title": "An open one",
-      "envelopeColor": "#f4ddc8",
-      "wax": "#b85a4a",
-      "body": "Love of my life,\n\nThis one doesn't have a date. Save it for a day you need it. A bad commute. A hard meeting. A 3pm when nothing feels right.\n\nWhen you open it, remember: I think you're the most extraordinary person I've ever met. And I get to love you. That's the luckiest thing in my life.\n\nUntil tonight,\nMe"
-    },
-    {
-      "id": 6,
-      "date": "Jul 12, 2026",
-      "title": "The one about summer",
-      "envelopeColor": "#dbbee9",
-      "wax": "#9e6e6e",
-      "body": "My love,\n\nWrite your letter here.\n\nYours,\nMe"
     }
   ],
   "scene": "diorama",
