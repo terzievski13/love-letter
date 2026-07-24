@@ -1002,12 +1002,14 @@ const ThreeScene = (() => {
       [-2.4, 2.7, [0.24, 0, 0], [0.13, -0.34, 0.18]],                     // path left (moved off the widened path)
       [3.3, 1.8, [0.20, 0, 0]],                                           // near the crest
       [-3.9, 0.8, [0.38, 0, 0], [0.19, 0.5, 0.3]],                        // left flank
-      // cliff-lip groups: anchor scaled by EDGE_SHRINK (0.7) to follow the
-      // trimmed shoreline in, so they still sit right at the lip instead of
-      // floating out over the now-closer water
-      [-3.92, -4.83, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
-      [3.71, -4.41, [0.42, 0, 0], [0.22, -0.42, 0.28]],
-      [-1.4, -5.04, [0.28, 0, 0]],
+      // cliff-lip groups: pulled in further still (0.7x on top of the
+      // shoreline's own 0.7x EDGE_SHRINK) — right at the trimmed lip they
+      // read as perched on the verge of falling in, so give them more
+      // breathing room from the water even though the ground under them
+      // is solid either way (terrainDrop is ~0 at both positions)
+      [-2.74, -3.38, [0.52, 0, 0], [0.30, 0.58, 0.26], [0.17, -0.44, 0.30]],// cliff lip
+      [2.60, -3.09, [0.42, 0, 0], [0.22, -0.42, 0.28]],
+      [-0.98, -3.53, [0.28, 0, 0]],
       [7.0, -1.5, [0.34, 0, 0], [0.18, 0.44, -0.2]]
     ];
     const rocks = [];
@@ -1127,17 +1129,17 @@ const ThreeScene = (() => {
       { at: [5.4, 3.0], kind: "rose", n: 10 },     // by the big right anchor
       { at: [-3.2, 2.0], kind: "daisy", n: 12 },
       { at: [2.6, -2.8], kind: "daisy", n: 12 },
-      // cliff/crest-lip clusters: anchor scaled by EDGE_SHRINK (0.7), same
-      // as the cliff-lip rocks, so they stay right at the trimmed edge
-      // instead of sitting out past it
-      { at: [-1.12, -3.92], kind: "rose", n: 10 },
-      { at: [-3.43, -4.2], kind: "daisy", n: 12 },  // cliff-lip rocks
-      { at: [3.36, -3.85], kind: "daisy", n: 10 },
+      // cliff/crest-lip clusters: pulled in further still (0.7x on top of
+      // the shoreline's own EDGE_SHRINK), same reasoning as the cliff-lip
+      // rocks above — more breathing room from the water
+      { at: [-0.78, -2.74], kind: "rose", n: 10 },
+      { at: [-2.40, -2.94], kind: "daisy", n: 12 },  // cliff-lip rocks
+      { at: [2.35, -2.69], kind: "daisy", n: 10 },
       { at: [-6.2, -3.4], kind: "cosmos", n: 8 },
       { at: [6.6, -0.6], kind: "daisy", n: 12 },
       { at: [0.8, 2.9], kind: "rose", n: 9 },     // right where the path crests
       { at: [-2.1, 5.4], kind: "lavender", n: 7 },
-      { at: [1.05, -4.41], kind: "daisy", n: 10 },   // crest lip, breaks horizon
+      { at: [0.73, -3.09], kind: "daisy", n: 10 },   // crest lip, breaks horizon
       { at: [-6.8, 1.4], kind: "rose", n: 9 },
       { at: [3.6, 4.6], kind: "daisy", n: 10 },
       { at: [5.6, -4.6], kind: "cosmos", n: 7 },
