@@ -22,17 +22,25 @@ This section is the source of truth for what each branch is. Check here
 before exploring the repo — it saves re-discovering the same history
 every session.
 
-- **`main`** — the live/deployed version. Sunset sky, lake, low-poly
-  triangular cone mountains. This is genuinely all she's ever seen
-  (i.e. nothing — see above). Don't edit this directly; land finished
-  work here via merge from `picnic-dome` when a landscape is ready.
+- **`main`** — the live/deployed version. As of 2026-07-24 (commit
+  `7843a57`) **it is identical to `picnic-dome`** — both run the
+  Sunset Headland rebuild described below. (The old low-poly cone
+  mountains are gone from `main`; that was true in an earlier phase of
+  this project but the description sat stale in this file for a while
+  — don't assume this section is current without checking. If it
+  matters, verify with `git diff main picnic-dome` rather than trusting
+  the prose.) This is genuinely all she's ever seen (i.e. nothing — see
+  above). Don't edit `main` directly; land finished work here via
+  merge/push from `picnic-dome` when ready.
 - **`picnic-dome`** (usual working branch) — active development.
   This is the **Day** version: sunset sky, lake/water, and smooth
-  quadratic-ridge mountain silhouettes (rounder, less spiky than
-  `main`'s cones), warmer color palette than `main`. Ground is a flat
-  `BoxGeometry`, same shape as `main` — despite the branch name there
-  is no literal dome in the current geometry; the name is just history
-  from an earlier domed-hill experiment that got replaced.
+  quadratic-ridge mountain silhouettes (rounder than the low-poly cones
+  of an earlier iteration), warm color palette. Ground is a flat
+  `BoxGeometry` — despite the branch name there is no literal dome in
+  the current geometry; the name is just history from an earlier
+  domed-hill experiment that got replaced. In sync with `main` as of
+  2026-07-24 (see above) — expect drift again as soon as new commits
+  land here without a matching push to `main`.
 - **`picnic-dome-night`** — parked, not merged anywhere. This is the
   **Night** version: dark indigo sky, three layered star fields, a
   glowing moon sprite, cool moonlight replacing the sun, and one warm
@@ -84,7 +92,7 @@ them. Leave these alone.
 - Mailbox model itself (arch shape, hollow shell, letter props inside)
   is unchanged across every branch — only the landscape around it varies
 
-## Current state of `picnic-dome` (the active branch)
+## Current state of `picnic-dome` (also `main` — in sync as of 2026-07-24)
 
 The July 2026 "Sunset Headland" rebuild (7 phases, one commit each)
 replaced the whole landscape; the mailbox/letter/camera systems were
@@ -159,7 +167,7 @@ untouched. What the scene is now:
   swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.
   Each is one function call in init(); trivial to cut.
 
-Possible next tweaks (user has not reviewed the rebuild yet):
+Possible next tweaks (now live on `main`, but still not shown to her):
 1. Snow caps / rock hues on the main range may want tuning once seen
    on a real screen — bands are relative to each summit (see
    makeRange), tweak the sstep thresholds.
