@@ -12,6 +12,11 @@ function App() {
   const initedRef = useR(false);
 
   const data = window.LETTERS_DATA;
+  // letters with an unlockAt stay hidden until that instant passes (compares absolute
+  // time, so it fires at the same moment regardless of the viewer's own timezone)
+  const visibleLetters = data.letters.filter(
+    (l) => !l.unlockAt || Date.now() >= new Date(l.unlockAt).getTime()
+  );
 
   useE(() => {
     if (initedRef.current) return;
@@ -64,12 +69,12 @@ function App() {
       {showInterior && (
         <div className="interior">
           <div className="letter-stage">
-            {data.letters.map((l, i) => (
+            {visibleLetters.map((l, i) => (
               <window.Envelope
                 key={l.id}
                 letter={l}
                 idx={i}
-                total={data.letters.length}
+                total={visibleLetters.length}
                 isOpen={openLetterId === l.id}
                 onClick={() => openLetter(l.id)}
                 onClose={closeLetter}
