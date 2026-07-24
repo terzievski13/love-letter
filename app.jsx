@@ -34,7 +34,7 @@ function App() {
   }, []);
 
   useE(() => {
-    const t = setTimeout(() => setHint(false), 6000);
+    const t = setTimeout(() => setHint(false), 30000);
     return () => clearTimeout(t);
   }, []);
 
@@ -104,8 +104,8 @@ function App() {
           </div>
           {hint && (
             <div className="outside-hint">
-              <div className="hint-arrow">↓</div>
               <div>click the mailbox</div>
+              <div className="hint-arrow">↑</div>
             </div>
           )}
         </>
