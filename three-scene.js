@@ -263,6 +263,34 @@ const ThreeScene = (() => {
             return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
           }
 
+          // Shoreline foam: the water plane is flat and has no idea where the
+          // real (displaced) ground dips below it, so this re-derives the same
+          // noise-wobbled ellipse boundary as terrainDrop()/groundHeight() in
+          // three-scene.js (kept in sync by hand — same constants) purely to
+          // know where the coast actually is, and paints a soft white band
+          // straddling it. Not a real foam simulation, just enough to break
+          // the hard grass/water edge.
+          float hash2f(vec2 p) {
+            return fract(sin(p.x * 127.1 + p.y * 311.7) * 43758.5453);
+          }
+          float valueNoise2f(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = p - i;
+            vec2 s = f * f * (3.0 - 2.0 * f);
+            float a = hash2f(i), b = hash2f(i + vec2(1.0, 0.0));
+            float c = hash2f(i + vec2(0.0, 1.0)), d = hash2f(i + vec2(1.0, 1.0));
+            return a + (b - a) * s.x + (c - a) * s.y + (a - b - c + d) * s.x * s.y;
+          }
+          float fbm2f(vec2 p) {
+            float v = 0.0, amp = 0.5, f = 1.0, total = 0.0;
+            for (int i = 0; i < 2; i++) {
+              v += amp * valueNoise2f(p * f);
+              total += amp;
+              amp *= 0.5; f *= 2.0;
+            }
+            return v / total;
+          }
+
           void main() {
             // far horizon (world z -300) to near shore (world z +100),
             // matching the water plane's own span
@@ -318,6 +346,24 @@ const ThreeScene = (() => {
             float cellPhase = hash(cell) * 6.2832;
             float shimmer = 0.5 + 0.5 * sin(uTime * 3.0 + cellPhase);
             float sparkle = spec * smoothstep(0.5, 1.0, shimmer);
+
+            // same ellipse math as terrainDrop(), EDGE_SHRINK = 0.7
+            vec2 pe = vWorldPos.xz / 0.7;
+            float wobF = (fbm2f(pe / 30.0 + vec2(40.2, 17.9)) - 0.5) * 0.04;
+            float exF = pe.x / 34.0;
+            float ezF = (pe.y - 23.0) / 32.0;
+            float dShore = sqrt(exF * exF + ezF * ezF) + wobF;
+            // same 0(land)..1(deep sea) value as terrainDrop()'s "edge". The
+            // real ground doesn't reach water level (y=-0.22) until this is
+            // already a little past 0 (worked out from groundHeight's mix of
+            // rolling-grass height and the -2.5 sea floor), so the foam band
+            // sits just past edgeF=0, not right at it — centering it at 0
+            // would land inland, hidden behind the ground mesh, and never
+            // draw at all.
+            float edgeF = smoothstep(0.95, 1.28, dShore);
+            float foamWidth = 1.5 + 0.05 * sin(uTime * 0.6 + dShore * 40.0);
+            float foam = smoothstep(0.0, 0.02, edgeF) * (1.0 - smoothstep(0.02, foamWidth, edgeF));
+            baseColor = mix(baseColor, vec3(0.88, 0.94, 0.96), foam * 0.2);
 
             vec3 glintColor = vec3(1.0, 0.58, 0.2);
             vec3 finalColor = baseColor + glintColor * sparkle * 1.8;
@@ -415,7 +461,10 @@ const ThreeScene = (() => {
   const EDGE_SHRINK = 0.7;
   function terrainDrop(x, z) {
     const xe = x / EDGE_SHRINK, ze = z / EDGE_SHRINK;
-    const wob = (fbm2(xe / 14 + 40.2, ze / 14 + 17.9, 2) - 0.5) * 0.12;
+    // low amplitude/frequency here on purpose: this shoreline reads as a
+    // clean, near-perfect ellipse with only the faintest wobble, not a
+    // lumpy hand-drawn coast
+    const wob = (fbm2(xe / 30 + 40.2, ze / 30 + 17.9, 2) - 0.5) * 0.04;
     const ex = xe / 34;
     const ez = (ze - 23) / 32;
     const d = Math.sqrt(ex * ex + ez * ez) + wob;
@@ -427,8 +476,12 @@ const ThreeScene = (() => {
   function groundHeight(x, z) {
     const r = Math.hypot(x, z);
     // gentle rolling grass — rises only: centered noise would dip low spots
-    // under the water plane and read as random inland ponds
-    let h = fbm2(x / 8 + 3.7, z / 8 + 9.1, 2) * 0.35;
+    // under the water plane and read as random inland ponds. Faded out by
+    // r=9 (same radius the knoll dip below fully clamps flat) so the noise
+    // never rides right up against the clamp floor — otherwise different
+    // columns hit -0.14 at slightly different radii and the flattening
+    // front itself reads as a wavy line where the hill meets the sea.
+    let h = fbm2(x / 8 + 3.7, z / 8 + 9.1, 2) * 0.35 * (1 - sstep(5, 9, r));
     // dead-flat plateau under the mailbox — base plate, shadow and camera
     // look-at all assume y=0 there; blends back to rolling by r=5
     h *= sstep(2.8, 5, r);
@@ -1194,244 +1247,57 @@ const ThreeScene = (() => {
     }).catch((e) => console.error("flower model load failed", e));
   }
 
-  function buildLighthouse() {
-    /* Tiny lighthouse + village on a rocky islet in the right-hand bay,
-       in the open water IN FRONT of the foothill ridge (the ridge strip
-       starts at z=−67 — anything deeper is swallowed by it). The sailboat's
-       lane (z=−55) passes just behind the islet. Each piece is deliberately
-       low-poly; fog does the distance work. Cut the whole thing by removing
-       the buildLighthouse() call. */
-    const g = new THREE.Group();
-    g.position.set(1.5, 0, -52);
-    g.scale.setScalar(0.85);
-    scene.add(g);
-
-    // rocky outcrop rising from the water — soft low-frequency lumps
-    const rockGeo = new THREE.SphereGeometry(1, 14, 10);
-    const rpos = rockGeo.attributes.position;
-    for (let i = 0; i < rpos.count; i++) {
-      const px = rpos.getX(i), py = rpos.getY(i), pz = rpos.getZ(i);
-      const j = 1 + (fbm2(px * 1.1 + 3.3, (py - pz) * 1.1 + 7.7, 2) - 0.5) * 0.22;
-      rpos.setXYZ(i, px * j, py * j, pz * j);
-    }
-    rockGeo.computeVertexNormals();
-    const rock = new THREE.Mesh(
-      rockGeo,
-      new THREE.MeshLambertMaterial({ color: 0x5f4636 })
-    );
-    rock.scale.set(3.4, 2.1, 2.6);
-    rock.position.y = -0.6;
-    g.add(rock);
-
-    // tower: white with red bands painted into a tiny canvas
-    const bc = document.createElement("canvas");
-    bc.width = 8; bc.height = 64;
-    const bctx = bc.getContext("2d");
-    bctx.fillStyle = "#f4ece0";
-    bctx.fillRect(0, 0, 8, 64);
-    bctx.fillStyle = "#c04c38";
-    bctx.fillRect(0, 8, 8, 12);
-    bctx.fillRect(0, 34, 8, 12);
-    const btex = new THREE.CanvasTexture(bc);
-    btex.colorSpace = THREE.SRGBColorSpace;
-
-    // Stone plinth the tower stands on — previously the tower rose straight
-    // out of the rock with no transition piece.
-    const ironMat = new THREE.MeshLambertMaterial({ color: 0x2a1e18 });
-    const plinth = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.56, 0.64, 0.32, 14),
-      new THREE.MeshLambertMaterial({ color: 0x8a7460 }) // same stone tone as the mountain rock
-    );
-    plinth.position.y = 1.66;
-    g.add(plinth);
-
-    const tower = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.34, 0.5, 2.6, 14),
-      new THREE.MeshLambertMaterial({ map: btex })
-    );
-    tower.position.y = 3.12;
-    g.add(tower);
-
-    // Gallery: a flared collar the lantern room stands on, plus a thin
-    // railing ring at its outer edge — the walkway real lighthouses have
-    // just below the light, which the old design (tower straight into a
-    // roof cone) skipped entirely.
-    const gallery = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.60, 0.36, 0.16, 14),
-      ironMat
-    );
-    gallery.position.y = 4.5;
-    g.add(gallery);
-    const railing = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.025, 6, 16), ironMat);
-    railing.rotation.x = Math.PI / 2;
-    railing.position.y = 4.58;
-    g.add(railing);
-
-    // Lantern room: a small glazed housing the light actually sits in,
-    // instead of the roof cone landing directly on the tower.
-    const lantern = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.30, 0.30, 0.42, 10),
-      new THREE.MeshLambertMaterial({ color: 0x3a2e22 })
-    );
-    lantern.position.y = 4.79;
-    g.add(lantern);
-
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(0.40, 0.42, 10),
-      new THREE.MeshLambertMaterial({ color: 0x8a3020 })
-    );
-    roof.position.y = 5.21;
-    g.add(roof);
-    // finial: small ball + spike capping the roof, a finishing touch real
-    // lighthouses have and the old bare cone tip lacked
-    const finialBall = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), ironMat);
-    finialBall.position.y = 5.47;
-    g.add(finialBall);
-    const finialSpike = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.14, 6), ironMat);
-    finialSpike.position.y = 5.61;
-    g.add(finialSpike);
-
-    // one warm lit window near the top — a lamp, not a light source
-    const lamp = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: (() => {
-        const lc = document.createElement("canvas");
-        lc.width = lc.height = 32;
-        const lctx = lc.getContext("2d");
-        const lg = lctx.createRadialGradient(16, 16, 2, 16, 16, 15);
-        lg.addColorStop(0, "rgba(255,224,160,1)");
-        lg.addColorStop(0.5, "rgba(255,200,120,0.5)");
-        lg.addColorStop(1, "rgba(255,200,120,0)");
-        lctx.fillStyle = lg;
-        lctx.fillRect(0, 0, 32, 32);
-        const t = new THREE.CanvasTexture(lc);
-        t.colorSpace = THREE.SRGBColorSpace;
-        return t;
-      })(),
-      transparent: true, depthWrite: false
-    }));
-    lamp.position.y = 4.79;
-    lamp.scale.set(0.7, 0.7, 1);
-    g.add(lamp);
-
-    // handful of village houses tucked on the islet around the tower
-    const houseMat = new THREE.MeshLambertMaterial({ color: 0xe8d8bc });
-    const roofMat = new THREE.MeshLambertMaterial({ color: 0xa04434 });
-    // three houses, huddled together on the leeward side — a hamlet, not
-    // a sprinkle
-    [[-1.4, 0.35], [-0.85, -0.55], [-1.75, -0.35]].forEach(([hx, hz], i) => {
-      const hh = 0.3 + hash2(41.7, i) * 0.12;
-      const hw = 0.34 + hash2(43.9, i) * 0.1;
-      // approximate the dome's local top height so houses hug the rock
-      const domeY = -0.6 + 2.1 * Math.sqrt(Math.max(0, 1 - (hx / 3.4) ** 2 - (hz / 2.6) ** 2));
-      const house = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, hw * 0.9), houseMat);
-      house.position.set(hx, domeY - 0.08 + hh / 2, hz);
-      house.rotation.y = hash2(47.3, i) * Math.PI;
-      g.add(house);
-      const hroof = new THREE.Mesh(new THREE.ConeGeometry(hw * 0.78, hh * 0.8, 4), roofMat);
-      hroof.position.set(hx, domeY - 0.08 + hh + hh * 0.4, hz);
-      hroof.rotation.y = house.rotation.y + Math.PI / 4;
-      g.add(hroof);
-    });
+  // Loads a GLTF prop and returns its root scene node as-is (materials,
+  // multi-mesh structure, and node hierarchy intact) — unlike
+  // flattenModelToParts, which throws all that away to bake many repeated
+  // instances into one merged geometry. These props are one-off placements,
+  // so there's nothing to flatten for.
+  async function loadGLTFScene(url) {
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const gltf = await new Promise((resolve, reject) =>
+      new GLTFLoader().load(url, resolve, undefined, reject));
+    return gltf.scene;
   }
 
-  // A flat triangle (or fan of triangles, for a gently bowed sail) built
-  // from an explicit vertex list — used for both sails and the pennant.
-  function makeFlatShape(points) {
-    const geo = new THREE.BufferGeometry();
-    const verts = [];
-    points.forEach(([x, y, z]) => verts.push(x, y, z || 0));
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-    const idx = [];
-    for (let i = 1; i < points.length - 1; i++) idx.push(0, i, i + 1);
-    geo.setIndex(idx);
-    geo.computeVertexNormals();
-    return geo;
+  function buildLighthouse() {
+    /* Lighthouse islet in the right-hand bay, in the open water IN FRONT of
+       the foothill ridge (the ridge strip starts at z=−67 — anything deeper
+       is swallowed by it). The sailboat's lane (z=−55) passes just behind
+       the islet. Modeled asset (objects/lighthouse_island.glb) — island
+       rock, dock, and tower all come from the file; nothing built here.
+       Cut the whole thing by removing the buildLighthouse() call. */
+    loadGLTFScene("objects/lighthouse_island.glb").then((g) => {
+      g.position.set(1.5, 0, -40); // x, y, z
+      g.rotation.y = Math.PI * 1.35; // rotation around the y axis, in radians
+      g.scale.setScalar(0.85);
+      scene.add(g);
+    }).catch((e) => console.error("lighthouse model load failed", e));
   }
 
   function buildSailboat() {
-    // Tiny sloop drifting across the bay at z≈−55. Unlit warm colors so fog
-    // blends it predictably; bob + drift ticked from updateLandscape. Local
-    // space: X = length (bow at +X, transom at −X), Y = up, Z = beam.
-    const boat = new THREE.Group();
-
-    // Hull: an explicit side-profile (pointed rising bow, flat transom
-    // stern, shallow keel belly) extruded across the beam — reads as an
-    // actual boat silhouette instead of the old plain half-cylinder tube.
-    const hullShape = new THREE.Shape();
-    const hullPts = [
-      [-0.72, 0.06], [-0.72, 0.30], [-0.30, 0.36], [0.35, 0.33],
-      [0.78, 0.10], [0.45, -0.05], [-0.10, -0.13]
-    ];
-    hullShape.moveTo(hullPts[0][0], hullPts[0][1]);
-    for (let i = 1; i < hullPts.length; i++) hullShape.lineTo(hullPts[i][0], hullPts[i][1]);
-    hullShape.closePath();
-    const hullGeo = new THREE.ExtrudeGeometry(hullShape, { depth: 0.42, bevelEnabled: false });
-    hullGeo.translate(0, 0, -0.21); // center the beam on the boat's centerline
-    const hull = new THREE.Mesh(hullGeo, new THREE.MeshBasicMaterial({ color: 0x4a3226, fog: true }));
-    boat.add(hull);
-
-    // tiny bowsprit — a real sloop detail, and gives the jib's forestay
-    // somewhere to attach in front of the bow instead of at it
-    const bowsprit = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.016, 0.32, 5),
-      new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
-    );
-    bowsprit.rotation.z = Math.PI / 2;
-    bowsprit.position.set(0.9, 0.24, 0);
-    boat.add(bowsprit);
-
-    const MAST_X = 0.05, DECK_Y = 0.32, MAST_H = 1.35;
-    const mast = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.028, MAST_H, 6),
-      new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
-    );
-    mast.position.set(MAST_X, DECK_Y + MAST_H / 2, 0);
-    boat.add(mast);
-
-    const boom = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.014, 0.014, 0.72, 5),
-      new THREE.MeshBasicMaterial({ color: 0x3a2820, fog: true })
-    );
-    boom.rotation.z = Math.PI / 2;
-    boom.position.set(MAST_X + 0.36, DECK_Y, 0);
-    boat.add(boom);
-
-    const sailMat = new THREE.MeshBasicMaterial({ color: 0xfff2e0, side: THREE.DoubleSide, fog: true });
-    // mainsail, aft of the mast — four points instead of a plain triangle so
-    // the leech bows out a touch, reading as cloth instead of a rigid card
-    const mainsail = new THREE.Mesh(makeFlatShape([
-      [MAST_X, DECK_Y, 0],
-      [MAST_X, DECK_Y + MAST_H - 0.06, 0],
-      [MAST_X + 0.5, DECK_Y + 0.55, 0.04],
-      [MAST_X + 0.74, DECK_Y, 0]
-    ]), sailMat);
-    boat.add(mainsail);
-    // jib, forward of the mast — smaller, forestayed from the bowsprit tip
-    // up to partway up the mast, the classic sloop silhouette
-    const jib = new THREE.Mesh(makeFlatShape([
-      [1.05, DECK_Y - 0.06, 0],
-      [MAST_X, DECK_Y + MAST_H * 0.72, 0],
-      [MAST_X + 0.2, DECK_Y, 0]
-    ]), new THREE.MeshBasicMaterial({ color: 0xf3e6cc, side: THREE.DoubleSide, fog: true }));
-    boat.add(jib);
-    // masthead pennant — small warm-red accent, echoes the mailbox
-    const pennant = new THREE.Mesh(makeFlatShape([
-      [MAST_X, DECK_Y + MAST_H, 0],
-      [MAST_X, DECK_Y + MAST_H - 0.08, 0],
-      [MAST_X + 0.16, DECK_Y + MAST_H - 0.04, 0]
-    ]), new THREE.MeshBasicMaterial({ color: 0xa5443a, side: THREE.DoubleSide, fog: true }));
-    boat.add(pennant);
-
-    boat.position.set(-30, -0.16, -55);
-    boat.rotation.y = Math.PI * 0.08;
-    scene.add(boat);
-    tickers.push((t) => {
-      // −45 → +30 over ~4 minutes; both ends are outside the frame, so the
-      // wrap-around teleport is never visible
-      boat.position.x = -45 + ((t * 0.3125) % 75);
-      boat.rotation.z = Math.sin(t * 0.8) * 0.03;
-      boat.position.y = -0.16 + Math.sin(t * 0.55) * 0.015;
-    });
+    // Sloop drifting across the bay at z≈−55, bob + drift ticked from
+    // updateLandscape. Modeled asset (objects/sailboat.glb); local space:
+    // X = length (bow at +X, transom at −X), Y = up, Z = beam.
+    // BOAT_X is just the starting point — position.x gets overwritten every
+    // frame by the drift below. BOAT_Y/BOAT_Z and BOAT_ROT_Z are the real,
+    // stable controls: y/z-depth of the lane, and the boat's base heading
+    // tilt (the animated rock/bob is added on top of these, not instead of).
+    const BOAT_X = -30, BOAT_Y = -1.0, BOAT_Z = -55;
+    const BOAT_ROT_Z = 0; // base rotation around the z axis, in radians
+    const BOAT_SCALE = 0.7; // uniform size — doesn't affect position/distance
+    loadGLTFScene("objects/sailboat.glb").then((boat) => {
+      boat.position.set(BOAT_X, BOAT_Y, BOAT_Z);
+      boat.rotation.y = Math.PI * 0.6;
+      boat.scale.setScalar(BOAT_SCALE);
+      scene.add(boat);
+      tickers.push((t) => {
+        // −45 → +30 over ~4 minutes; both ends are outside the frame, so the
+        // wrap-around teleport is never visible
+        boat.position.x = -45 + ((t * 0.3125) % 75);
+        boat.rotation.z = BOAT_ROT_Z + Math.sin(t * 0.8) * 0.03;
+        boat.position.y = BOAT_Y + Math.sin(t * 0.55) * 0.015;
+      });
+    }).catch((e) => console.error("sailboat model load failed", e));
   }
 
   // Warm saddle-brown wood texture for the mailbox interior.

@@ -2,7 +2,7 @@
 
 A personal one-page website for my girlfriend. A 3D interactive mailbox 
 where I leave her letters over time. Hosted on Vercel at:
-https://love-letter-henna.vercel.app
+https://lovelettersisa.vercel.app
 
 **She has not seen this site at all yet.** Nothing has been shown to her —
 not the mailbox, not the letters, none of it. The goal right now is to
