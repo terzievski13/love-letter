@@ -1154,24 +1154,34 @@ const ThreeScene = (() => {
     const insideStone = (x, z) =>
       stones.some((st) => Math.hypot(x - st.x, z - st.z) < st.sx * 1.15);
 
-    // ---------- flowers: daisy, rose, cosmos + lavender drifts ----------
-    // All four species are real props flattened into merged geometry (see
-    // flattenModelToParts) — daisy/rose/cosmos loaded from flowers/*.glb,
-    // lavender built procedurally by buildLavenderModel (ported from
-    // flowers/lavender-flower.html, which was never exported to a .glb).
-    // Replaces the old reddish procedural foxglove spike, which didn't
-    // match any of the four modeled species and read as out of place.
-    const daisyPlacements = [], rosePlacements = [], cosmosPlacements = [], lavenderPlacements = [];
-    const PLACEMENTS = { daisy: daisyPlacements, rose: rosePlacements, cosmos: cosmosPlacements, lavender: lavenderPlacements };
+    // ---------- flowers: daisy, rose, cosmos-daisy + lavender drifts ----------
+    // All species are real props flattened into merged geometry (see
+    // flattenModelToParts) — daisy/rose/cosmos-daisy loaded from
+    // flowers/*.glb, lavender built procedurally by buildLavenderModel
+    // (ported from flowers/lavender-flower.html, which was never exported
+    // to a .glb). Replaces the old reddish procedural foxglove spike, which
+    // didn't match any of the modeled species and read as out of place.
+    //
+    // cosmos-daisy is a single model (flowers/cosmos-daisy-flower*.glb)
+    // exported three times with only the petal/throat materials recolored
+    // (pink/blue/orange) — identical geometry, confirmed by loading all
+    // three and comparing bounding boxes. Each color is its own
+    // kind/placements array/InstancedMesh, same pattern as every other
+    // species — each patch below is a single solid color, not mixed.
+    const daisyPlacements = [], rosePlacements = [], lavenderPlacements = [];
+    const cosmosDaisyPinkPlacements = [], cosmosDaisyBluePlacements = [], cosmosDaisyOrangePlacements = [];
+    const PLACEMENTS = {
+      daisy: daisyPlacements, rose: rosePlacements, lavender: lavenderPlacements,
+      cosmosDaisyPink: cosmosDaisyPinkPlacements, cosmosDaisyBlue: cosmosDaisyBluePlacements, cosmosDaisyOrange: cosmosDaisyOrangePlacements
+    };
     // cluster centers on the knoll flanks (heaviest beside the path, like
     // the board), near the big rocks, along the cliff lip inner side —
-    // cosmos and lavender get two modest clusters each so they read as
-    // occasional accents among the daisy/rose drifts, not another dominant
-    // species.
+    // lavender gets two modest clusters so it reads as an occasional
+    // accent among the daisy/rose drifts, not another dominant species.
     const flowerClusters = [
-      { at: pathSide(0.25, 1.4), kind: "daisy", n: 13 },
+      { at: pathSide(0.25, 1.4), kind: "cosmosDaisyBlue", n: 13 },  // marked "replace with blue Cosmos flowers"
       { at: pathSide(0.5, -1.5), kind: "daisy", n: 12 },
-      { at: pathSide(0.8, 1.6), kind: "rose", n: 10 },
+      { at: pathSide(0.8, 1.6), kind: "lavender", n: 10 },  // marked "replace with lavender" (was rose)
       { at: pathSide(0.14, -1.3), kind: "daisy", n: 10 },
       { at: [-4.2, 3.6], kind: "daisy", n: 13 },  // by the big left anchor
       { at: [5.4, 3.0], kind: "rose", n: 10 },     // by the big right anchor
@@ -1183,15 +1193,18 @@ const ThreeScene = (() => {
       { at: [-0.78, -2.74], kind: "rose", n: 10 },
       { at: [-2.40, -2.94], kind: "daisy", n: 12 },  // cliff-lip rocks
       { at: [2.35, -2.69], kind: "daisy", n: 10 },
-      { at: [-6.2, -3.4], kind: "cosmos", n: 8 },
       { at: [6.6, -0.6], kind: "daisy", n: 12 },
       { at: [0.8, 2.9], kind: "rose", n: 9 },     // right where the path crests
       { at: [-2.1, 5.4], kind: "lavender", n: 7 },
       { at: [0.73, -3.09], kind: "daisy", n: 10 },   // crest lip, breaks horizon
       { at: [-6.8, 1.4], kind: "rose", n: 9 },
       { at: [3.6, 4.6], kind: "daisy", n: 10 },
-      { at: [5.6, -4.6], kind: "cosmos", n: 7 },
-      { at: [5.0, 4.4], kind: "lavender", n: 6 }
+      { at: [5.0, 4.4], kind: "lavender", n: 6 },
+      // Cosmos-daisy solid-color patches, placed per the user's marked
+      // reference screenshot — each patch is a single color rather than a
+      // mix, so pink/blue/orange each get their own distinct drift.
+      { at: [3.0, 1.2], kind: "cosmosDaisyOrange", n: 14 },   // marked "replace with orange cosmos only"
+      { at: [-3.0, 1.0], kind: "cosmosDaisyPink", n: 12 }     // marked "replace with pink only cosmos"
     ];
     // All four species are wide static props (unlike the old flattened
     // petal geometry, which was small enough that close placements never
@@ -1206,7 +1219,10 @@ const ThreeScene = (() => {
     // instance gets a random yaw, so that far side can swing toward any
     // neighbor; this is the only radius that's safe regardless of which
     // way it lands.
-    const CANOPY_RADIUS = { daisy: 0.123, rose: 0.16, cosmos: 0.15, lavender: 0.09 };
+    const CANOPY_RADIUS = {
+      daisy: 0.123, rose: 0.16, lavender: 0.09,
+      cosmosDaisyPink: 0.094, cosmosDaisyBlue: 0.094, cosmosDaisyOrange: 0.094
+    };
     const placedCanopies = []; // { x, z, r }
     flowerClusters.forEach(({ at: [cx, cz], kind, n }, pi) => {
       for (let i = 0; i < n; i++) {
@@ -1227,23 +1243,33 @@ const ThreeScene = (() => {
       }
     });
 
-    // daisy/rose/cosmos models are downloaded async — the rest of the
-    // scene doesn't wait on them, they just pop in a beat after everything
-    // else. Lavender is built procedurally so it's ready immediately, but
-    // is instanced alongside the others here for one consistent pop-in.
+    // daisy/rose/cosmos-daisy models are downloaded async — the rest of
+    // the scene doesn't wait on them, they just pop in a beat after
+    // everything else. Lavender is built procedurally so it's ready
+    // immediately, but is instanced alongside the others here for one
+    // consistent pop-in.
     Promise.all([
       loadFlowerModel("flowers/daisy-flower.glb"),
       loadFlowerModel("flowers/rose-flower.glb"),
-      loadFlowerModel("flowers/cosmos-flower.glb")
-    ]).then(([daisyParts, roseParts, cosmosParts]) => {
+      loadFlowerModel("flowers/cosmos-daisy-flower.glb"),
+      loadFlowerModel("flowers/cosmos-daisy-flower-blue.glb"),
+      loadFlowerModel("flowers/cosmos-daisy-flower-orange.glb")
+    ]).then(([daisyParts, roseParts, cdPinkParts, cdBlueParts, cdOrangeParts]) => {
       // scale each model's native size down to roughly the footprint the
       // old procedural flowers had, so cluster density/composition doesn't
       // suddenly change — easy to retune once seen live. Native heights
       // (denominators) are each model's own loaded bounding-box height.
       buildFlowerSpecies(daisyParts, daisyPlacements, 0.15 / 0.3242);
       buildFlowerSpecies(roseParts, rosePlacements, 0.16 / 0.2882);
-      buildFlowerSpecies(cosmosParts, cosmosPlacements, 0.24 / 0.3702);
       buildFlowerSpecies(buildLavenderModel(), lavenderPlacements, 0.4 / 0.77);
+      // cosmos-daisy's three color exports share one native geometry
+      // (bounding-box height 0.3193, checked by loading all three) — same
+      // scale factor for all three so they read as one species, just
+      // recolored.
+      const cosmosDaisyScale = 0.20 / 0.3193;
+      buildFlowerSpecies(cdPinkParts, cosmosDaisyPinkPlacements, cosmosDaisyScale);
+      buildFlowerSpecies(cdBlueParts, cosmosDaisyBluePlacements, cosmosDaisyScale);
+      buildFlowerSpecies(cdOrangeParts, cosmosDaisyOrangePlacements, cosmosDaisyScale);
     }).catch((e) => console.error("flower model load failed", e));
   }
 
@@ -1269,7 +1295,7 @@ const ThreeScene = (() => {
     loadGLTFScene("objects/lighthouse_island.glb").then((g) => {
       g.position.set(1.5, 0, -40); // x, y, z
       g.rotation.y = Math.PI * 1.35; // rotation around the y axis, in radians
-      g.scale.setScalar(0.85);
+      g.scale.setScalar(0.95);
       scene.add(g);
     }).catch((e) => console.error("lighthouse model load failed", e));
   }
