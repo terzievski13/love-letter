@@ -1,5 +1,13 @@
 {
+  "functions": {
+    "api/*.js": {
+      "includeFiles": "letters.jsx"
+    }
+  },
   "crons": [
-    { "path": "/api/notify-check", "schedule": "0 7 * * *" }
+    {
+      "path": "/api/notify-check",
+      "schedule": "0 7 * * *"
+    }
   ]
 }

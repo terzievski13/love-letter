@@ -11,7 +11,7 @@
 
    Requires: Authorization: Bearer <NOTIFY_SECRET>   (or ?secret=...) */
 
-const { fetchLetters, isVisible, publicOrigin } = require("../lib/letters");
+const { fetchLetters, isVisible, publicOrigin, lettersSource } = require("../lib/letters");
 const store = require("../lib/store");
 const { sendPush, sendMail, sendReceipt, pushReady, mailReady } = require("../lib/send");
 
@@ -50,6 +50,7 @@ module.exports = async (req, res) => {
       locked: letters.filter((l) => !isVisible(l, now)).map((l) => ({ id: l.id, unlockAt: l.unlockAt })),
       alreadyAnnounced: already,
       pending: pending.map((l) => l.id),
+      lettersFrom: lettersSource(),
       redis: configured ? "connected" : "NOT CONFIGURED",
       push: pushReady() ? "ready" : "VAPID keys not set",
       email: mailReady() ? "ready" : "Gmail credentials not set",

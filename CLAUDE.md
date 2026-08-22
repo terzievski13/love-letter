@@ -201,10 +201,16 @@ that write into `.github/workflows/` are rejected. Until it is moved, the
 daily Vercel cron is the only trigger and a new letter is announced within
 a day rather than within minutes.
 
-**It never keeps its own copy of the letters.** It fetches the deployed
+**It never keeps its own copy of the letters.** It reads the deployed
 `letters.jsx` and parses the JSON out of the `/*EDITMODE-BEGIN*/` sentinels
 that already wrap it, then applies the same `unlockAt` rule app.jsx uses.
-So it can only ever announce letters that are genuinely live.
+So it can only ever announce letters that are genuinely live. It reads the
+file off the function's own disk (`includeFiles` in `vercel.json` puts it
+there) rather than over HTTP, because Vercel's Deployment Protection
+answers requests to protected deployments with a 302 to a login page — an
+HTTP self-fetch works on the production domain but fails on every preview.
+The HTTP path survives as a fallback and `lettersFrom` in the endpoint's
+response says which one was used.
 
 Files: `api/notify-check.js` (the checker), `api/subscribe.js` (public,
 stores her subscription), `lib/letters.js` `lib/store.js` `lib/send.js`,
