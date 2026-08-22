@@ -23,6 +23,7 @@ const NOTIFY_COPY = {
 // Public half of the VAPID pair. Safe to commit - it is public by design.
 const VAPID_PUBLIC_KEY = "BMmbx_mCfGu5NB3VWEqMybPnbd1_olVtona888e_1Kb_kSny80cL6efjQvsRBcxN5Hjp2JS5JsDynvPVXisXgp4";
 
+// only set when she says "not now" - a stored subscription is what records a yes
 const NOTIFY_DISMISSED = "mailbox:notify-dismissed";
 const APPEAR_DELAY = 2600; // let the letters land before asking anything
 
@@ -54,18 +55,22 @@ function NotifyPrompt() {
     let timer = null;
 
     (async () => {
-      try {
-        if (localStorage.getItem(NOTIFY_DISMISSED) === "1") return;
-      } catch (e) {
-        // private mode can throw on localStorage; carry on and just ask
-      }
-
-      // already subscribed on this device? then there is nothing to ask
+      /* If this device already has a subscription, quietly send it again and
+         never ask. That re-send matters: if she once said yes but the server
+         failed to store it (or the store was later wiped) the browser would
+         still hold a subscription, so the prompt would hide itself forever
+         and she would silently stop getting letters. Retrying on every visit
+         heals that without ever bothering her. */
       try {
         const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) {
-          const existing = await reg.pushManager.getSubscription();
-          if (existing) return;
+        const existing = reg ? await reg.pushManager.getSubscription() : null;
+        if (existing) {
+          fetch("/api/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(existing),
+          }).catch(() => {});
+          return;
         }
       } catch (e) {
         // no registration yet is the normal case, not an error
@@ -73,6 +78,12 @@ function NotifyPrompt() {
 
       // Chrome has permanently blocked us - asking again would do nothing
       if (Notification.permission === "denied") return;
+
+      try {
+        if (localStorage.getItem(NOTIFY_DISMISSED) === "1") return;
+      } catch (e) {
+        // private mode can throw on localStorage; carry on and just ask
+      }
 
       timer = setTimeout(() => {
         if (!cancelled) setState("asking");
@@ -113,7 +124,6 @@ function NotifyPrompt() {
       if (!res.ok) throw new Error("subscribe endpoint said " + res.status);
 
       setState("granted");
-      try { localStorage.setItem(NOTIFY_DISMISSED, "1"); } catch (e) {}
       setTimeout(() => setState("hidden"), 4000);
     } catch (err) {
       console.warn("[mailbox] could not enable notifications:", err);
