@@ -1,0 +1,13 @@
+{
+  "name": "love-letter-notifications",
+  "private": true,
+  "description": "Server-side dependencies for the mailbox notifications. The site itself is static and needs none of this - these are only installed for the functions in api/.",
+  "dependencies": {
+    "@upstash/redis": "1.38.2",
+    "nodemailer": "9.0.5",
+    "web-push": "3.6.7"
+  },
+  "scripts": {
+    "test": "node test-notifications.js"
+  }
+}

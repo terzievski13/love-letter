@@ -92,6 +92,10 @@ function App() {
           {stage === "inside" && !openLetterId && (
             <div className="inside-hint">pick a letter</div>
           )}
+
+          {/* asks once whether the mailbox may notify her; manages its own
+              state and hides itself for good once answered */}
+          {stage === "inside" && !openLetterId && <window.NotifyPrompt />}
         </div>
       )}
 

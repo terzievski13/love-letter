@@ -1,0 +1,68 @@
+# ============================================================================
+# THIS FILE IS NOT ACTIVE WHERE IT SITS. It has to be at
+#   .github/workflows/notify.yml
+# to run. It is parked here because the GitHub token on the laptop lacks the
+# 'workflow' scope, and GitHub rejects any push that writes into
+# .github/workflows/.
+#
+# To switch it on, either:
+#   a) on github.com: Add file -> Create new file -> name it
+#      .github/workflows/notify.yml -> paste everything below this header
+#   b) or from the laptop:
+#        gh auth refresh -h github.com -s workflow
+#        mkdir -p .github/workflows
+#        git mv .github/notify-workflow.yml .github/workflows/notify.yml
+#        # delete this header, then commit and push
+#
+# Until then the daily Vercel cron in vercel.json is the only trigger, so a
+# new letter is announced within a day rather than within minutes.
+# ============================================================================
+
+# Asks the mailbox whether any letter has gone live without being announced.
+#
+# The endpoint is idempotent, so calling it often is harmless - it only ever
+# sends something the first time a given letter becomes visible.
+#
+#   on push    - a letter you just uploaded is announced within ~2 minutes
+#   schedule   - catches letters that unlock on a timer, to the quarter hour
+#
+# Vercel's own cron (see vercel.json) runs once a day as a backstop, in case
+# GitHub disables this schedule - which it does automatically in repositories
+# with no commits for 60 days.
+
+name: notify
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: notify
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Let the Vercel deploy finish first
+        if: github.event_name == 'push'
+        run: sleep 90
+
+      - name: Check for unannounced letters
+        env:
+          SECRET: ${{ secrets.NOTIFY_SECRET }}
+        run: |
+          set -o pipefail
+          code=$(curl -sS --max-time 60 -o response.json -w '%{http_code}' \
+            -H "Authorization: Bearer $SECRET" \
+            "https://lovelettersisa.vercel.app/api/notify-check")
+          echo "HTTP $code"
+          cat response.json
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::notify-check returned HTTP $code"
+            exit 1
+          fi

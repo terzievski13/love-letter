@@ -4,9 +4,11 @@ A personal one-page website for my girlfriend. A 3D interactive mailbox
 where I leave her letters over time. Hosted on Vercel at:
 https://lovelettersisa.vercel.app
 
-**She has not seen this site at all yet.** Nothing has been shown to her —
-not the mailbox, not the letters, none of it. The goal right now is to
-finish a version worth actually giving her.
+**She has seen it.** As of August 2026 she has opened the site and read
+letters — this changed in the 2026-08-22 session, and the note here used
+to say the opposite, so don't trust any older prose claiming she hasn't.
+The goal now is adding letters over time, and making sure she finds out
+when one arrives (see Notifications below).
 
 ## Stack
 
@@ -173,6 +175,74 @@ Possible next tweaks (now live on `main`, but still not shown to her):
    makeRange), tweak the sstep thresholds.
 2. Glitter streak is subtle; bump dash alpha in buildWater if wanted.
 3. Mailbox model proportions/material — unchanged, not urgent.
+
+## Notifications (added 2026-08-22, branch `notifications`)
+
+Her phone gets a push notification, plus an email as backup, whenever a
+letter goes live. This is the first server-side code the project has ever
+had — everything before it was static files.
+
+**The one thing to understand:** `/api/notify-check` is *idempotent*. It
+works out which letters are visible but not yet announced, announces
+exactly those, and records it in Redis. Calling it a hundred times sends
+one notification. That is deliberate — three separate triggers call it, so
+any one of them failing costs nothing:
+
+- GitHub Action on push to `main` — a letter you upload lands within ~2 min
+- GitHub Action every 15 min — catches letters that unlock on a timer
+- Vercel cron once a day (`vercel.json`) — backstop, because GitHub disables
+  scheduled workflows in repos with no commits for 60 days
+
+**The GitHub Action is not switched on yet.** Its file is parked at
+`.github/notify-workflow.yml` and has to be copied to
+`.github/workflows/notify.yml` to do anything — see the header comment
+inside it. The laptop's `gh` token lacks the `workflow` scope, so pushes
+that write into `.github/workflows/` are rejected. Until it is moved, the
+daily Vercel cron is the only trigger and a new letter is announced within
+a day rather than within minutes.
+
+**It never keeps its own copy of the letters.** It fetches the deployed
+`letters.jsx` and parses the JSON out of the `/*EDITMODE-BEGIN*/` sentinels
+that already wrap it, then applies the same `unlockAt` rule app.jsx uses.
+So it can only ever announce letters that are genuinely live.
+
+Files: `api/notify-check.js` (the checker), `api/subscribe.js` (public,
+stores her subscription), `lib/letters.js` `lib/store.js` `lib/send.js`,
+`sw.js` (service worker), `notify.jsx` (the in-site prompt),
+`.github/notify-workflow.yml`, `manifest.json`, `icon-{192,512}.png`.
+
+Things that will bite you:
+
+- **`sw.js` must never gain a `fetch` handler.** The site transpiles JSX in
+  the browser at runtime; a caching service worker would serve a stale,
+  half-broken app that is painful to clear from her phone. It handles
+  `push` and `notificationclick` only.
+- **Push subscriptions are bound to their origin.** One created on a
+  preview URL will never receive a push sent from production. After any
+  domain change she must re-subscribe.
+- **Run `?seed=1` once against a fresh database**, or the first real run
+  finds five unannounced letters and fires them all at her at once. The
+  endpoint refuses that case with a 409 rather than doing it, but seeding
+  is the intended fix.
+- The public VAPID key is hardcoded in `notify.jsx` because there is no
+  build step and therefore no way to inject env vars into browser code.
+  That is fine — it is public by design. The private half is in Vercel's
+  environment variables and in `.vapid-keys.json`, which is gitignored.
+  **The repo is public**, so nothing secret may ever be committed.
+- Wording for the prompt and the notifications lives in `NOTIFY_COPY` at
+  the top of `notify.jsx` and `COPY` at the top of `lib/send.js`. It is in
+  Bulgarian and deliberately never names the letter — some titles are
+  spoilers.
+
+Run `npm test` for the offline test suite (40 checks, no network, nothing
+sent): duplicate suppression, the backlog guard, simultaneous triggers,
+timed unlocks, dead-subscription pruning, delivery failure and retry, and
+the subscribe endpoint's validation.
+
+Environment variables (Vercel): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`VAPID_SUBJECT`, `NOTIFY_SECRET`, `CRON_SECRET` (same value),
+`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `HER_EMAIL`, `MY_EMAIL`, plus Upstash's
+own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
 
 ## Landscape design decisions (confirmed, `picnic-dome`)
 

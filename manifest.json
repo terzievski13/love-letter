@@ -1,0 +1,12 @@
+{
+  "name": "letters, from me",
+  "short_name": "писма",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2a1a14",
+  "theme_color": "#e07040",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
