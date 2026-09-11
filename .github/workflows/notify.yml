@@ -1,23 +1,3 @@
-# ============================================================================
-# THIS FILE IS NOT ACTIVE WHERE IT SITS. It has to be at
-#   .github/workflows/notify.yml
-# to run. It is parked here because the GitHub token on the laptop lacks the
-# 'workflow' scope, and GitHub rejects any push that writes into
-# .github/workflows/.
-#
-# To switch it on, either:
-#   a) on github.com: Add file -> Create new file -> name it
-#      .github/workflows/notify.yml -> paste everything below this header
-#   b) or from the laptop:
-#        gh auth refresh -h github.com -s workflow
-#        mkdir -p .github/workflows
-#        git mv .github/notify-workflow.yml .github/workflows/notify.yml
-#        # delete this header, then commit and push
-#
-# Until then the daily Vercel cron in vercel.json is the only trigger, so a
-# new letter is announced within a day rather than within minutes.
-# ============================================================================
-
 # Asks the mailbox whether any letter has gone live without being announced.
 #
 # The endpoint is idempotent, so calling it often is harmless - it only ever
