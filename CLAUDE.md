@@ -193,13 +193,12 @@ any one of them failing costs nothing:
 - Vercel cron once a day (`vercel.json`) — backstop, because GitHub disables
   scheduled workflows in repos with no commits for 60 days
 
-**The GitHub Action is not switched on yet.** Its file is parked at
-`.github/notify-workflow.yml` and has to be copied to
-`.github/workflows/notify.yml` to do anything — see the header comment
-inside it. The laptop's `gh` token lacks the `workflow` scope, so pushes
-that write into `.github/workflows/` are rejected. Until it is moved, the
-daily Vercel cron is the only trigger and a new letter is announced within
-a day rather than within minutes.
+**The GitHub Action is switched on** (as of 2026-09-11) — it lives at
+`.github/workflows/notify.yml`. Getting there needed `gh auth refresh -h
+github.com -s workflow` first, since the laptop's `gh` token originally
+lacked the `workflow` scope that pushes into `.github/workflows/` require.
+All three triggers listed above are live now; a push-triggered or timed
+letter is announced within minutes, not a day.
 
 **It never keeps its own copy of the letters.** It reads the deployed
 `letters.jsx` and parses the JSON out of the `/*EDITMODE-BEGIN*/` sentinels
@@ -215,7 +214,16 @@ response says which one was used.
 Files: `api/notify-check.js` (the checker), `api/subscribe.js` (public,
 stores her subscription), `lib/letters.js` `lib/store.js` `lib/send.js`,
 `sw.js` (service worker), `notify.jsx` (the in-site prompt),
-`.github/notify-workflow.yml`, `manifest.json`, `icon-{192,512}.png`.
+`.github/workflows/notify.yml`, `manifest.json`, `icon-{192,512}.png`.
+
+`api/test-real-push.js` also exists (added 2026-09-11) — a **temporary**
+diagnostic route, secret-gated the same way as `notify-check`, that sends
+any text you like to every stored subscription without touching the real
+"announced" bookkeeping. It's how the push pipeline got verified end to
+end (confirmed working on a real iPhone). Unlike the real endpoint it can
+send arbitrary text, not just the fixed copy, so it's a bit more exposure
+than anything else here if the secret ever leaked — meant to be deleted
+once no longer needed, not left forever.
 
 Things that will bite you:
 
