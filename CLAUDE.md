@@ -1,11 +1,27 @@
 # Letters, From Me
 
-A personal one-page website for my girlfriend. A 3D interactive mailbox 
+A personal one-page website for my girlfriend. A 3D interactive mailbox
 where I leave her letters over time. Hosted on Vercel at:
 https://lovelettersisa.vercel.app
 
 The ongoing work is adding letters over time, and making sure she finds
-out when one arrives (see Notifications below).
+out when one arrives.
+
+## Where the details are — check here first
+
+This file is the overview. Three companion files hold the detail, and
+each one is the source of truth for its area. **Read the relevant file
+before changing anything in that area** — don't re-derive it from the
+code, and don't work from this summary alone:
+
+| If the change touches… | Read first |
+| --- | --- |
+| Terrain, mountains, water, sky, sun, fog, the path, rocks, flowers, lighting, anything in three-scene.js | **LANDSCAPE.md** |
+| Push notifications or email, api/, lib/, sw.js, notify.jsx, vercel.json, .github/workflows/, the "did she get told" question | **NOTIFICATIONS.md** |
+| Writing, editing, timing or publishing a letter; letters.jsx | **ADDING-A-LETTER.md** |
+
+Anything not in that table — the mailbox model, the camera, the letter
+animation, the React overlay — is covered below.
 
 ## Stack
 
@@ -14,6 +30,15 @@ out when one arrives (see Notifications below).
 - Babel Standalone 7.29 (JSX transpiled in-browser, no bundler)
 - Plain CSS in index.html (no Tailwind)
 - GitHub → Vercel auto-deploy — **only pushes to `main` go live**
+
+## Running it locally
+
+    python3 -m http.server 8123
+
+then open http://localhost:8123 — no build step, so a refresh is all it
+takes to see a change. After a visual change to the scene, actually look
+at it (screenshot the page) before calling it done; judging a 3D change
+by reading the code doesn't work.
 
 ## Branches
 
@@ -28,9 +53,8 @@ grass-blade rendering prototype (`grass-lab/`).
 
 ## Working features (DO NOT modify unless I ask)
 
-These are confirmed good and identical across all branches above —
-only the landscape (sky/ground/water/mountains/lights) differs between
-them. Leave these alone.
+These are finished and confirmed good. They have survived every
+landscape rebuild untouched. Leave them alone.
 
 ### Letter flow (perfect — do not touch)
 - "Pick a letter" view: fanned envelope spread inside mailbox, each 
@@ -57,184 +81,7 @@ them. Leave these alone.
 - Spring simulation (stiffness 0.045, damping 0.84)
 - Decelerates clearly near fully open with no bounce/overshoot
 - Mailbox model itself (arch shape, hollow shell, letter props inside)
-  is unchanged across every branch — only the landscape around it varies
-
-## Current state of the scene
-
-The July 2026 "Sunset Headland" rebuild (7 phases, one commit each)
-replaced the whole landscape; the mailbox/letter/camera systems were
-untouched. What the scene is now:
-
-- **Terrain**: rolling grassy headland dropping into the sea, shaped by
-  a single `groundHeight(x,z)` function in three-scene.js. There is a
-  dead-flat plateau (exactly y=0) within r≈2.8 of the origin — the
-  mailbox, its shadow, and the camera look-at depend on it. EVERY new
-  object placed on the ground must use `groundHeight` for its y.
-- **Mountains**: three real 3D displaced-terrain strips (ridged noise,
-  lit Lambert with a warm emissive floor; the far range is unlit
-  MeshBasic with painted shading so fog fades it predictably). The old
-  cardboard-cutout problem is fixed. Composition note: the camera looks
-  diagonally, so at mountain depth "screen centre" is world x≈−55 and
-  the sun gap lives at x≈−95.
-- **Water**: one shader-driven plane (`buildWater`) — a depth-based
-  color ramp, two slow traveling ripples read as a fake bump normal, and
-  a twinkling Blinn-Phong glitter path aimed at the sun's real position.
-  An earlier version stacked canvas textures and a separate dashed-streak
-  plane; both are gone. Sun disc and halo sprites sit at (−95, −130). All
-  landscape motion runs through the `tickers` array → `updateLandscape(t)`
-  (one line in `animate()`).
-- **Foreground**: copied from the user's concept board ("FOREGROUND
-  CONCEPT — a cozy place for letters"; keep matching it, not taste).
-  Knoll: the land dips ~0.5 away from the y=0 plateau (the plateau
-  itself can never move) so the mailbox crests a hill — this is why the
-  SEA sits at y=−0.22 (dipped lawn clamped at −0.14 must never flood;
-  ripple overlays/streak/boat heights all moved with it). Path (matched
-  to the user's AI-render reference image, July 2026): a WIDE worn-dirt
-  band (`pathMask`, w ≈ 0.5–0.8) on a CUBIC bezier S-curve
-  (`PATH_P0/C1/C2/P3`, `pathBez`) — enters at the frame's bottom edge
-  left of the mailbox, bows LEFT, then swings back to arrive at the
-  mailbox straight from the FRONT (C2 sits directly in front of P3 in x
-  so the final tangent runs along −z; move C2 sideways and the approach
-  goes diagonal again), where it opens into a rounded dirt CLEARING the
-  mailbox stands on (the `clearing` disc in `pathMask`, a bit wider than
-  the path per the reference). P0 sits just past the frame's bottom edge —
-  found by PROJECTING through the camera (bottom edge meets ground at
-  z≈4.0–4.3 near x=0; the projection helper needs
-  camera.updateMatrixWorld(true) first), never eyeballed. Stones are
-  flat worn slab pavers embedded in the dirt: `makeStoneGeometry` lathe
-  puck profile squashed low (sy = s·0.3), de-indexed for faceted
-  shading, x/z-only jitter, gray-tan, arc-length spaced along the curve
-  (`tAtFraction`) so they don't bunch; castShadow OFF (flat slabs only
-  smear shadow-map blotches). Path pebble speckle kept LOW-contrast —
-  at ~11 texels/world-unit any dark blob magnifies into what looks like
-  a stray shadow. Earlier looks, in order: "no stones, wide sandy path"
-  → "narrow trail + melted sphere pads" → "raised faceted pucks on a
-  right-bowing quadratic" → current. The small "path left" rock cluster
-  lives at (−2.4, 2.7), clear of the current curve.
-  Gray rocks in nestled
-  clusters (big anchors at bottom frame corners). NO grass — removed
-  entirely (was a real 3D tuft model, grass-tuft.glb; several
-  iterations — card billboards, then the tuft model, brightness/contrast
-  tuning — ended with the user asking to cut it, so the ground is bare
-  between rocks/flowers/path for now). `grass-tuft.glb` is still in the
-  project root (the user's modeled asset) but nothing loads it; the
-  generated `grass-tuft-data.js` extraction was deleted since it's
-  regeneratable from the .glb if grass comes back. Flowers sit in
-  drifts between the rocks — daisy, rose and cosmos-daisy (pink, blue,
-  orange) loaded from `flowers/*.glb`, plus a lavender built in code;
-  all merged into instanced geometry. How each is placed is commented in
-  three-scene.js at the flowers section. NO
-  trees (pines cut on request). All shadow-casters sit inside the sun's
-  ±10 shadow box — don't place casters outside it (shadows silently
-  vanish), don't widen the box (blurs the mailbox shadow), and blades
-  don't cast (shadow-map noise).
-- **Story details**: lighthouse islet + tiny village at (1.5, −52) —
-  must stay in FRONT of the foothill ridge strip (z ≥ −67) or it gets
-  swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.
-  Each is one function call in init(); trivial to cut.
-
-Possible next tweaks:
-1. Snow caps / rock hues on the main range may want tuning once seen
-   on a real screen — bands are relative to each summit (see
-   makeRange), tweak the sstep thresholds.
-2. Glitter is subtle. It comes from the specular/twinkle block in
-   buildWater's fragment shader now — there is no streak plane to tweak.
-3. Mailbox model proportions/material — unchanged, not urgent.
-
-## Notifications (added 2026-08-22)
-
-Her phone gets a push notification, plus an email as backup, whenever a
-letter goes live. This is the first server-side code the project has ever
-had — everything before it was static files.
-
-**The one thing to understand:** `/api/notify-check` is *idempotent*. It
-works out which letters are visible but not yet announced, announces
-exactly those, and records it in Redis. Calling it a hundred times sends
-one notification. That is deliberate — three separate triggers call it, so
-any one of them failing costs nothing:
-
-- GitHub Action on push to `main` — a letter you upload lands within ~2 min
-- GitHub Action every 15 min — catches letters that unlock on a timer
-- Vercel cron once a day (`vercel.json`) — backstop, because GitHub disables
-  scheduled workflows in repos with no commits for 60 days
-
-**The GitHub Action is switched on** (as of 2026-09-11) — it lives at
-`.github/workflows/notify.yml`. Getting there needed `gh auth refresh -h
-github.com -s workflow` first, since the laptop's `gh` token originally
-lacked the `workflow` scope that pushes into `.github/workflows/` require.
-All three triggers listed above are live now; a push-triggered or timed
-letter is announced within minutes, not a day.
-
-**It never keeps its own copy of the letters.** It reads the deployed
-`letters.jsx` and parses the JSON out of the `/*EDITMODE-BEGIN*/` sentinels
-that already wrap it, then applies the same `unlockAt` rule app.jsx uses.
-So it can only ever announce letters that are genuinely live. It reads the
-file off the function's own disk (`includeFiles` in `vercel.json` puts it
-there) rather than over HTTP, because Vercel's Deployment Protection
-answers requests to protected deployments with a 302 to a login page — an
-HTTP self-fetch works on the production domain but fails on every preview.
-The HTTP path survives as a fallback and `lettersFrom` in the endpoint's
-response says which one was used.
-
-Files: `api/notify-check.js` (the checker), `api/subscribe.js` (public,
-stores her subscription), `lib/letters.js` `lib/store.js` `lib/send.js`,
-`sw.js` (service worker), `notify.jsx` (the in-site prompt),
-`.github/workflows/notify.yml`, `manifest.json`, `icon-{192,512}.png`.
-
-`api/test-real-push.js` also exists (added 2026-09-11) — a **temporary**
-diagnostic route, secret-gated the same way as `notify-check`, that sends
-any text you like to every stored subscription without touching the real
-"announced" bookkeeping. It's how the push pipeline got verified end to
-end (confirmed working on a real iPhone). Unlike the real endpoint it can
-send arbitrary text, not just the fixed copy, so it's a bit more exposure
-than anything else here if the secret ever leaked — meant to be deleted
-once no longer needed, not left forever.
-
-Things that will bite you:
-
-- **`sw.js` must never gain a `fetch` handler.** The site transpiles JSX in
-  the browser at runtime; a caching service worker would serve a stale,
-  half-broken app that is painful to clear from her phone. It handles
-  `push` and `notificationclick` only.
-- **Push subscriptions are bound to their origin.** One created on a
-  preview URL will never receive a push sent from production. After any
-  domain change she must re-subscribe.
-- **Run `?seed=1` once against a fresh database**, or the first real run
-  finds five unannounced letters and fires them all at her at once. The
-  endpoint refuses that case with a 409 rather than doing it, but seeding
-  is the intended fix.
-- The public VAPID key is hardcoded in `notify.jsx` because there is no
-  build step and therefore no way to inject env vars into browser code.
-  That is fine — it is public by design. The private half is in Vercel's
-  environment variables and in `.vapid-keys.json`, which is gitignored.
-  **The repo is public**, so nothing secret may ever be committed.
-- Wording for the prompt and the notifications lives in `NOTIFY_COPY` at
-  the top of `notify.jsx` and `COPY` at the top of `lib/send.js`. It is in
-  Bulgarian and deliberately never names the letter — some titles are
-  spoilers.
-
-Run `npm test` for the offline test suite (40 checks, no network, nothing
-sent): duplicate suppression, the backlog guard, simultaneous triggers,
-timed unlocks, dead-subscription pruning, delivery failure and retry, and
-the subscribe endpoint's validation.
-
-Environment variables (Vercel): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
-`VAPID_SUBJECT`, `NOTIFY_SECRET`, `CRON_SECRET` (same value),
-`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `HER_EMAIL`, `MY_EMAIL`, plus Upstash's
-own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
-
-## Landscape design decisions (confirmed)
-
-- Scene mood: warm sunset, NOT "A Short Hike" style (too game-y).
-- Ground fills more of the frame than a typical reference photo would (wanted)
-- Mailbox stays centred, on flat ground
-- Sky gradient (top → horizon): #b84830 → #e07040 → #f0a868 → #eeb890
-- Water: deep blue far (#1e3248) → clean near-shore blue (#68a8c4), warm glitter path
-- Mountains: real lit geometry (see above), warm rock tones, warm-tinted
-  snow (#f6ddd0 — never pure white), fog kept at (30, 175)
-- Canvas-texture gotcha learned the hard way: THREE.Color stores hex as
-  LINEAR; call convertLinearToSRGB() before writing pixels to a canvas
-  that becomes an sRGB texture, or every color double-darkens.
+  has never changed — only the landscape around it has
 
 ## Future ideas (don't build yet)
 
@@ -245,7 +92,6 @@ own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
   so this now means rebuilding the night look as well as the switching
   logic. Undecided: what counts as "sunset" (fixed hours vs. actual local
   sunset time), whether it snaps or transitions, and timezone handling.
-- Add new letters over time without rebuilding
 - Tree to one side of the mailbox (bare winter style or with round foliage)
 - Fireflies, ambient sound, wind effect
 - Better mailbox model proportions
@@ -253,11 +99,9 @@ own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
 ## Version control
 
 - GitHub repo: https://github.com/terzievski13/love-letter
-- Deployed to Vercel via GitHub auto-deploy — only `main` deploys
 - Commit at meaningful checkpoints with descriptive messages
-- Before big refactors, commit current working state first as a safety net
-- There is only `main`, and pushing to it deploys — so finish and check
-  a change before pushing, rather than pushing to try it out
+- Pushing to `main` deploys — so finish and check a change before
+  pushing, rather than pushing to try it out
 
 ## How I work
 
@@ -274,9 +118,18 @@ own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
 
 ## Conventions
 
-- All files are flat in the project root (no src/ folder)
-- 3D scene logic in three-scene.js
-- React UI overlay in app.jsx
-- Envelope + letter components in envelope.jsx
-- Letter content in letters.jsx (one object per letter in the LETTERS_DATA array)
+- All files are flat in the project root (no src/ folder), except:
+  `api/` (server endpoints), `lib/` (server helpers), `flowers/` and
+  `objects/` (.glb models used by the scene)
+- 3D scene logic in three-scene.js — see LANDSCAPE.md
+- React UI overlay in app.jsx; envelope + letter components in
+  envelope.jsx
+- Letter content in letters.jsx — see ADDING-A-LETTER.md
+- Notification code in api/, lib/, sw.js, notify.jsx — see
+  NOTIFICATIONS.md
+- tweaks.jsx / tweaks-panel.jsx are a developer tweaking panel, loaded
+  on every page load by index.html. Not part of the experience she
+  sees; leave alone unless asked
+- `grass-tuft.glb` in the root is a modeled asset nothing currently
+  loads (grass was cut) — keep it, it's regeneratable work
 - Use TypeScript-friendly patterns even though we're in plain JS
