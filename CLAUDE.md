@@ -4,11 +4,8 @@ A personal one-page website for my girlfriend. A 3D interactive mailbox
 where I leave her letters over time. Hosted on Vercel at:
 https://lovelettersisa.vercel.app
 
-**She has seen it.** As of August 2026 she has opened the site and read
-letters — this changed in the 2026-08-22 session, and the note here used
-to say the opposite, so don't trust any older prose claiming she hasn't.
-The goal now is adding letters over time, and making sure she finds out
-when one arrives (see Notifications below).
+The ongoing work is adding letters over time, and making sure she finds
+out when one arrives (see Notifications below).
 
 ## Stack
 
@@ -18,48 +15,16 @@ when one arrives (see Notifications below).
 - Plain CSS in index.html (no Tailwind)
 - GitHub → Vercel auto-deploy — **only pushes to `main` go live**
 
-## Branches — read this first, don't re-derive it from the files
+## Branches
 
-This section is the source of truth for what each branch is. Check here
-before exploring the repo — it saves re-discovering the same history
-every session.
+`main` is the only branch, and it is what's deployed. Work on it
+directly and push when a change is finished — every push to `main` goes
+live on Vercel. Commit a working state before a big change so there's a
+point to come back to.
 
-- **`main`** — the live/deployed version. As of 2026-07-24 (commit
-  `7843a57`) **it is identical to `picnic-dome`** — both run the
-  Sunset Headland rebuild described below. (The old low-poly cone
-  mountains are gone from `main`; that was true in an earlier phase of
-  this project but the description sat stale in this file for a while
-  — don't assume this section is current without checking. If it
-  matters, verify with `git diff main picnic-dome` rather than trusting
-  the prose.) This is genuinely all she's ever seen (i.e. nothing — see
-  above). Don't edit `main` directly; land finished work here via
-  merge/push from `picnic-dome` when ready.
-- **`picnic-dome`** (usual working branch) — active development.
-  This is the **Day** version: sunset sky, lake/water, and smooth
-  quadratic-ridge mountain silhouettes (rounder than the low-poly cones
-  of an earlier iteration), warm color palette. Ground is a flat
-  `BoxGeometry` — despite the branch name there is no literal dome in
-  the current geometry; the name is just history from an earlier
-  domed-hill experiment that got replaced. In sync with `main` as of
-  2026-07-24 (see above) — expect drift again as soon as new commits
-  land here without a matching push to `main`.
-- **`picnic-dome-night`** — parked, not merged anywhere. This is the
-  **Night** version: dark indigo sky, three layered star fields, a
-  glowing moon sprite, cool moonlight replacing the sun, and one warm
-  point-light glow at the mailbox itself (a lit window in the dark).
-  Reserved for the real-time day/night feature below — don't build
-  that feature until asked, but don't discard this branch either.
-- **`picnic-dome-no-grass`** — not a separate line of work, just a
-  named checkpoint: it's an ancestor commit of `picnic-dome` (not a
-  diverging branch), sitting right after grass was cut but *before*
-  the flower petal-geometry rework. Grass = removed. Flowers = the
-  old flattened-sphere/cone placeholder shapes. Kept as a reference
-  point in case the daisy/buttercup/spike rework needs comparing
-  against or backing out independently of the grass decision.
-- `feature/alpine-meadow` — deleted. Was a cliffs/pine-trees/chalet
-  direction, rejected (didn't like it).
-- `grass-lab/` folder — deleted. Was a standalone grass-blade
-  rendering prototype, abandoned at the time.
+Two directions were tried and rejected; don't re-propose them: a
+cliffs/pine-trees/chalet "alpine meadow" look, and a standalone
+grass-blade rendering prototype (`grass-lab/`).
 
 ## Working features (DO NOT modify unless I ask)
 
@@ -94,7 +59,7 @@ them. Leave these alone.
 - Mailbox model itself (arch shape, hollow shell, letter props inside)
   is unchanged across every branch — only the landscape around it varies
 
-## Current state of `picnic-dome` (also `main` — in sync as of 2026-07-24)
+## Current state of the scene
 
 The July 2026 "Sunset Headland" rebuild (7 phases, one commit each)
 replaced the whole landscape; the mailbox/letter/camera systems were
@@ -110,11 +75,14 @@ untouched. What the scene is now:
   MeshBasic with painted shading so fog fades it predictably). The old
   cardboard-cutout problem is fixed. Composition note: the camera looks
   diagonally, so at mountain depth "screen centre" is world x≈−55 and
-  the sun gap lives at x≈−75.
-- **Water**: gradient base plane + two tiling ripple overlays scrolling
-  via texture offsets + additive fog-free glitter streak + sun disc and
-  halo sprites at (−75, −130). All landscape motion runs through the
-  `tickers` array → `updateLandscape(t)` (one line in `animate()`).
+  the sun gap lives at x≈−95.
+- **Water**: one shader-driven plane (`buildWater`) — a depth-based
+  color ramp, two slow traveling ripples read as a fake bump normal, and
+  a twinkling Blinn-Phong glitter path aimed at the sun's real position.
+  An earlier version stacked canvas textures and a separate dashed-streak
+  plane; both are gone. Sun disc and halo sprites sit at (−95, −130). All
+  landscape motion runs through the `tickers` array → `updateLandscape(t)`
+  (one line in `animate()`).
 - **Foreground**: copied from the user's concept board ("FOREGROUND
   CONCEPT — a cozy place for letters"; keep matching it, not taste).
   Knoll: the land dips ~0.5 away from the y=0 plateau (the plateau
@@ -151,15 +119,11 @@ untouched. What the scene is now:
   between rocks/flowers/path for now). `grass-tuft.glb` is still in the
   project root (the user's modeled asset) but nothing loads it; the
   generated `grass-tuft-data.js` extraction was deleted since it's
-  regeneratable from the .glb if grass comes back. Flowers = white
-  daisies w/ yellow centers + buttercups + pink spikes, in drifts —
-  real 3D petal geometry (not flattened spheres): daisies/buttercups
-  are individually-shaped rounded petals fanned around a centre and
-  merged into one static geometry (`makePetalFlowerGeometry` /
-  `mergeInstances` in three-scene.js — hand-rolled merge, no
-  BufferGeometryUtils since this project loads bare three.min.js);
-  pink spikes are a tall stem of small lathe-turned bell florets
-  (`makeBellGeometry`), foxglove-style. NO
+  regeneratable from the .glb if grass comes back. Flowers sit in
+  drifts between the rocks — daisy, rose and cosmos-daisy (pink, blue,
+  orange) loaded from `flowers/*.glb`, plus a lavender built in code;
+  all merged into instanced geometry. How each is placed is commented in
+  three-scene.js at the flowers section. NO
   trees (pines cut on request). All shadow-casters sit inside the sun's
   ±10 shadow box — don't place casters outside it (shadows silently
   vanish), don't widen the box (blurs the mailbox shadow), and blades
@@ -169,14 +133,15 @@ untouched. What the scene is now:
   swallowed — and a sailboat drifting across z=−55 on a ~4-min loop.
   Each is one function call in init(); trivial to cut.
 
-Possible next tweaks (now live on `main`, but still not shown to her):
+Possible next tweaks:
 1. Snow caps / rock hues on the main range may want tuning once seen
    on a real screen — bands are relative to each summit (see
    makeRange), tweak the sstep thresholds.
-2. Glitter streak is subtle; bump dash alpha in buildWater if wanted.
+2. Glitter is subtle. It comes from the specular/twinkle block in
+   buildWater's fragment shader now — there is no streak plane to tweak.
 3. Mailbox model proportions/material — unchanged, not urgent.
 
-## Notifications (added 2026-08-22, branch `notifications`)
+## Notifications (added 2026-08-22)
 
 Her phone gets a push notification, plus an email as backup, whenever a
 letter goes live. This is the first server-side code the project has ever
@@ -258,13 +223,13 @@ Environment variables (Vercel): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
 `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `HER_EMAIL`, `MY_EMAIL`, plus Upstash's
 own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
 
-## Landscape design decisions (confirmed, `picnic-dome`)
+## Landscape design decisions (confirmed)
 
 - Scene mood: warm sunset, NOT "A Short Hike" style (too game-y).
 - Ground fills more of the frame than a typical reference photo would (wanted)
 - Mailbox stays centred, on flat ground
 - Sky gradient (top → horizon): #b84830 → #e07040 → #f0a868 → #eeb890
-- Water: deep blue far (#1e3248) → clean near-shore blue (#68a8c4), warm glitter streak
+- Water: deep blue far (#1e3248) → clean near-shore blue (#68a8c4), warm glitter path
 - Mountains: real lit geometry (see above), warm rock tones, warm-tinted
   snow (#f6ddd0 — never pure white), fog kept at (30, 175)
 - Canvas-texture gotcha learned the hard way: THREE.Color stores hex as
@@ -273,14 +238,13 @@ own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
 
 ## Future ideas (don't build yet)
 
-- **Real-time day/night sync** — the app should detect the real device
-  clock and automatically show the Day scene (`picnic-dome`) or Night
-  scene (`picnic-dome-night`) depending on whether it's actually day or
-  night for her. Not designed yet — needs decisions on: what counts as
-  "sunset" (fixed hours vs. actual local sunset time), whether it snaps
-  or transitions between states, and timezone handling. Both visual
-  states already exist (see Branches above); only the switching logic
-  is unbuilt.
+- **Real-time day/night sync** — show a night version of the scene when
+  it's actually night for her. A night scene (dark indigo sky, layered
+  star fields, moon sprite, cool moonlight, one warm glow at the mailbox)
+  used to exist on a branch, but that branch was deleted on 2026-09-17 —
+  so this now means rebuilding the night look as well as the switching
+  logic. Undecided: what counts as "sunset" (fixed hours vs. actual local
+  sunset time), whether it snaps or transitions, and timezone handling.
 - Add new letters over time without rebuilding
 - Tree to one side of the mailbox (bare winter style or with round foliage)
 - Fireflies, ambient sound, wind effect
@@ -292,8 +256,8 @@ own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
 - Deployed to Vercel via GitHub auto-deploy — only `main` deploys
 - Commit at meaningful checkpoints with descriptive messages
 - Before big refactors, commit current working state first as a safety net
-- Landscape experiments live on branches precisely so they don't touch
-  `main`/Vercel until one is finished and merged — see Branches above
+- There is only `main`, and pushing to it deploys — so finish and check
+  a change before pushing, rather than pushing to try it out
 
 ## How I work
 
