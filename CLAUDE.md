@@ -144,4 +144,7 @@ landscape rebuild untouched. Leave them alone.
 - picker-lab.html / picker-lab.jsx are the design sandbox where the deck
   was chosen over three other pickers — not loaded by the site. See
   PICKER-LAB.md
+- outbox-lab.html / outbox-lab.jsx are a design sandbox for where her
+  letters to me sit next to mine (three layouts on the real deck) — not
+  loaded by the site. See OUTBOX-LAB.md
 - Use TypeScript-friendly patterns even though we're in plain JS
