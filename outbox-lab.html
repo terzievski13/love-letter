@@ -51,6 +51,9 @@
   .seg button + button { border-left: 1px solid #33271f; }
   .seg button:hover { background: #221a14; }
   .seg button[data-on="1"] { background: #e3c28d; color: #20150f; font-weight: 600; }
+  .size-ctl { display: flex; align-items: center; gap: 7px; }
+  .size-ctl input { width: 110px; accent-color: #e3c28d; }
+  .size-ctl output { min-width: 36px; font-variant-numeric: tabular-nums; color: #e3c28d; }
   .lab-note { color: #6d5c4e; font-style: italic; margin-left: auto; }
   .ghost-btn {
     appearance: none; border: 1px solid #33271f; border-radius: 7px;
@@ -205,10 +208,13 @@
   .switch .count { font-size: 15px; opacity: .7; margin-left: 5px; }
 
   /* B: the tied bundle */
+  /* --bs is the "bundle size" control in the lab bar; it scales from the
+     bottom-right corner, so the bundle grows into the empty space */
   .bundle {
     position: absolute; right: 26px; bottom: 118px; z-index: 320;
     width: 112px; height: 92px; cursor: pointer;
     appearance: none; border: 0; background: transparent; padding: 0;
+    transform: scale(var(--bs, 1)); transform-origin: bottom right;
   }
   .bundle-env {
     position: absolute; left: 6px; width: 100px; height: 64px; border-radius: 3px;
@@ -316,7 +322,7 @@
     .inside-hint { top: 14%; }
     .reader-stage { transform: scale(0.8); transform-origin: 50% 50%; }
     .switch { top: 70px; }
-    .bundle { bottom: 124px; right: 14px; transform: scale(.82); transform-origin: bottom right; }
+    .bundle { bottom: 124px; right: 14px; transform: scale(calc(var(--bs, 1) * .82)); }
     .pill-btn { font-size: 18px; padding: 8px 14px; }
   }
   @media (max-width: 520px) {

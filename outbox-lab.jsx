@@ -107,7 +107,7 @@ function markRead(ids) {
 /* ---------------- url state ---------------- */
 
 // embed=1 is the copy of the lab running inside the phone frame
-const DEFAULTS = { view: "switch", n: "5", frame: "full", bar: "1", embed: "0" };
+const DEFAULTS = { view: "switch", n: "5", frame: "full", bar: "1", embed: "0", bs: "1" };
 function readParams() {
   const q = new URLSearchParams(location.hash.replace(/^#/, ""));
   const p = { ...DEFAULTS };
@@ -271,10 +271,10 @@ function SwitchView({ hers, hersKey, focus, onWrite, actions }) {
 
 /* ---------------- B · the tied bundle ---------------- */
 
-function Bundle({ hers, onClick }) {
+function Bundle({ hers, onClick, scale }) {
   const top = hers.slice(0, 3).reverse();
   return (
-    <button className={"bundle" + (hers.length ? "" : " bundle-empty")} onClick={onClick}>
+    <button className={"bundle" + (hers.length ? "" : " bundle-empty")} style={{ "--bs": scale }} onClick={onClick}>
       {(top.length ? top : [{ id: "e", envelopeColor: "#e8d4b8" }]).map((l, k, arr) => (
         <div
           key={l.id}
@@ -300,7 +300,7 @@ function Bundle({ hers, onClick }) {
   );
 }
 
-function BundleView({ hers, hersKey, focus, onWrite, actions }) {
+function BundleView({ hers, hersKey, focus, onWrite, actions, bundleScale }) {
   const [showHers, setShowHers] = useState(false);
   const [openId, setOpenId] = useState(null);
   useOnFocus(focus, () => { setOpenId(null); setShowHers(true); });
@@ -322,7 +322,7 @@ function BundleView({ hers, hersKey, focus, onWrite, actions }) {
             <>
               <button className="back-btn">{COPY.backOutside}</button>
               <div className="inside-hint">{COPY.pick}</div>
-              <Bundle hers={hers} onClick={() => setShowHers(true)} />
+              <Bundle hers={hers} scale={bundleScale} onClick={() => setShowHers(true)} />
             </>
           )}
           <button className="pill-btn" style={{ top: 24, right: 24 }} onClick={onWrite}>{COPY.write}</button>
@@ -447,6 +447,7 @@ function Lab() {
     focus,
     onWrite: () => setComposer({ initial: null }),
     actions,
+    bundleScale: Number(p.bs) || 1,
   };
 
   const View = p.view === "bundle" ? BundleView : p.view === "shelves" ? ShelvesView : SwitchView;
@@ -462,6 +463,15 @@ function Lab() {
           <div className="grp"><label>her letters</label>
             <Seg value={p.n} onChange={(v) => set("n", v)} options={[["0", "0"], ["1", "1"], ["5", "5"], ["20", "20"]]} />
           </div>
+          {p.view === "bundle" && (
+            <div className="grp"><label>bundle size</label>
+              <div className="size-ctl">
+                <input type="range" min="0.5" max="1.8" step="0.05" value={p.bs} onChange={(e) => set("bs", e.target.value)} />
+                <output>{Math.round(Number(p.bs) * 100)}%</output>
+                {p.bs !== "1" && <button className="ghost-btn" onClick={() => set("bs", "1")}>100%</button>}
+              </div>
+            </div>
+          )}
           <div className="grp"><label>frame</label>
             <Seg value={p.frame} onChange={(v) => set("frame", v)} options={[["full", "fill"], ["phone", "phone"]]} />
           </div>
@@ -485,7 +495,7 @@ function Lab() {
             <iframe
               key={frameKey}
               title="phone"
-              src={`outbox-lab.html#view=${p.view}&n=${p.n}&bar=0&embed=1`}
+              src={`outbox-lab.html#view=${p.view}&n=${p.n}&bs=${p.bs}&bar=0&embed=1`}
             />
           </div>
         ) : (

@@ -47,6 +47,8 @@ them, ☰ (bottom-left) brings them back.
 
 - **layout** — A, B or C
 - **her letters** — 0, 1, 5 or 20 sample letters
+- **bundle size** (layout B only) — a slider from 50% to 180%; the bundle
+  grows from its bottom-right corner. `bs=` in the address bar
 - **frame** — fill the window, or a phone frame on a desktop screen. The
   phone frame runs the lab inside a real 390px-wide window, so it lays
   itself out exactly as it would on a phone (its controls follow the bar)
