@@ -8,8 +8,11 @@ function App() {
   const [stage, setStage] = useS("outside"); // outside | arriving | inside | reading
   const [openLetterId, setOpenLetterId] = useS(null);
   const [hint, setHint] = useS(true);
+  const [writerOpen, setWriterOpen] = useS(false); // the secret writing tool (writer.jsx)
   const canvasRef = useR(null);
   const initedRef = useR(false);
+  const stageRef = useR(stage);
+  stageRef.current = stage;
 
   const data = window.LETTERS_DATA;
   // letters with an unlockAt stay hidden until that instant passes (compares absolute
@@ -32,6 +35,11 @@ function App() {
       setTimeout(() => window.ThreeScene.cameraTo("inside", 3000), 250);
       // letters appear once camera has arrived
       setTimeout(() => setStage("inside"), 3300);
+    });
+    // holding the mailbox (~2s) opens the writing tool - only from outside,
+    // so it can never fire mid-flight or while she's reading
+    window.ThreeScene.onMailboxLongPress(() => {
+      if (stageRef.current === "outside") setWriterOpen(true);
     });
   }, []);
 
@@ -113,6 +121,8 @@ function App() {
           )}
         </>
       )}
+
+      {writerOpen && <window.Writer onClose={() => setWriterOpen(false)} />}
     </div>
   );
 }

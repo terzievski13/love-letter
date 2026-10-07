@@ -1,11 +1,60 @@
 # Adding a letter
 
-Everything a letter needs lives in one file: **letters.jsx**. There is no
-build step — you edit that file, push it, and it's live. Nothing else has
-to change, and nothing in the 3D scene or the letter animation needs
-touching to add a letter.
+There are two ways, and they end up in exactly the same place — the
+letters list in **letters.jsx**:
 
-## The short version
+- **From the site** (the easy way): hold the mailbox, write, press send.
+- **By hand**: edit letters.jsx and push. Still works exactly as before.
+
+## From the site — the writing tool
+
+1. On the outside view, **press and hold the mailbox for about 2
+   seconds**. (A normal tap still opens it as usual.)
+2. Enter your password — once per device, it's remembered after that.
+3. **Write a new letter**: title, the letter, envelope and wax colours
+   (the + takes any colour), and when it **arrives** — *now*, or *later*
+   on a date and hour in **Sofia time**. No UTC maths; the tool converts.
+4. Press **send it now** (twice — the second tap is the "are you sure",
+   because her phone gets told within minutes) or **schedule it**.
+
+It's on the site in about 2 minutes and her notification goes out on its
+own. An unsent new letter is kept if you close the tool by accident.
+
+Your letters from the app are listed in the tool — tap one to change it.
+A letter already in her mailbox stays there when you edit it (only its
+text and colours change). The first five letters were written by hand and
+can't be changed from the tool.
+
+**How it works:** the tool sends the letter to `api/write-letter.js`,
+which checks the password and commits letters.jsx to GitHub through
+`lib/github.js` — exactly as if you'd pushed it — so Vercel redeploys and
+the notify Action announces it. Letters made this way carry
+`"fromApp": true`; that's what lets the tool edit them and nothing else.
+The tool itself is `writer.jsx`; the hold is in `three-scene.js`
+(`onMailboxLongPress`).
+
+**It needs two settings on Vercel** (Settings → Environment Variables):
+
+| Name | What |
+| --- | --- |
+| `WRITER_PASSWORD` | the password the tool asks for — make it long; the repo is public, so the endpoint is findable |
+| `GITHUB_TOKEN` | a fine-grained GitHub token for **this repo only**, permission **Contents: Read and write**, nothing else |
+
+Without them the tool stays locked (it answers "not set on Vercel"), so
+nothing breaks.
+
+**⚠ After the tool has published something, run `git pull` before
+editing letters.jsx by hand** — GitHub has a newer copy than your laptop.
+If you forget, `git push` refuses and tells you to pull; do that, and
+it's fine.
+
+`npm test` checks the tool's back end offline (`test-writer.js`: the
+password, the file staying byte-identical, only app letters editable,
+two commits landing at once).
+
+## By hand
+
+### The short version
 
 1. Open `letters.jsx`.
 2. Copy one of the existing letter blocks and change the values.
@@ -15,7 +64,7 @@ touching to add a letter.
    on its own — see NOTIFICATIONS.md. You don't have to do anything for
    that to happen.
 
-## What a letter looks like
+### What a letter looks like
 
 ```json
 {
@@ -37,8 +86,9 @@ touching to add a letter.
 | `wax` | Wax seal color, hex. The lighter/darker shades of the seal are worked out from this one value. |
 | `body` | The letter itself. `\n` starts a new line, `\n\n` leaves a blank line between paragraphs. The text reveals line by line, so short paragraphs read better than one long block. |
 | `unlockAt` | Optional. Hides the letter until a moment in time — see below. |
+| `fromApp` | Set by the writing tool on letters it made — leave it alone. |
 
-## Making a letter appear later
+### Making a letter appear later
 
 Add `unlockAt` with a UTC timestamp:
 
@@ -59,7 +109,7 @@ without you doing anything.
 
 You can push a timed letter days in advance. That's the point of it.
 
-## Rules you can't break
+### Rules you can't break
 
 - **Everything between `/*EDITMODE-BEGIN*/` and `/*EDITMODE-END*/` must
   stay strict JSON.** Double quotes around every key and string, no
@@ -75,7 +125,7 @@ You can push a timed letter days in advance. That's the point of it.
 - The mailbox shows the **last** letter in the file first, so add new
   letters at the end of the list.
 
-## Check before you push
+### Check before you push
 
 Run this in the project folder. It reads the file exactly the way the
 notification system does, so if it prints OK, notifications will work:
@@ -96,7 +146,7 @@ until its `unlockAt` passes — to preview one, temporarily set its
 pushing. (Editing the value keeps the block valid JSON; commenting the
 line out does not.)
 
-## Then
+### Then
 
 ```bash
 git add letters.jsx

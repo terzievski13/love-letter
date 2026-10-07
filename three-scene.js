@@ -2,6 +2,7 @@
    Exposes a single global ThreeScene with:
      - init(canvas)
      - onMailboxClick(cb)
+     - onMailboxLongPress(cb)  // hold ~1.8s on the mailbox: the secret writing tool
      - cameraTo(stage)  // 'outside' | 'inside'
      - setDoorOpen(t)   // 0..1
      - dispose()
@@ -12,6 +13,13 @@ const ThreeScene = (() => {
   let mailboxGroup, doorGroup, interiorLight;
   let envelopeMeshes = [];
   let onClickCb = null;
+  let onLongPressCb = null;
+  // long-press on the mailbox opens the writing tool (writer.jsx). A still
+  // finger held this long is a press; moving it further than the slop cancels.
+  const LONG_PRESS_MS = 1800;
+  const LONG_PRESS_SLOP = 10;
+  let press = null;           // { x, y, timer } while a finger is down on the mailbox
+  let swallowClick = false;   // the click a mouse sends after a long press must not also open the mailbox
   let raycaster, pointer;
   let canvasEl;
   let _lastW = 0, _lastH = 0;
@@ -79,6 +87,12 @@ const ThreeScene = (() => {
 
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("click", onCanvasClick);
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointerup", cancelPress);
+    canvas.addEventListener("pointercancel", cancelPress);
+    canvas.addEventListener("pointerleave", cancelPress);
+    // a held finger would otherwise bring up the phone's own long-press menu
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     window.addEventListener("resize", onResize);
 
     // ResizeObserver — handles the iframe's late layout where clientWidth starts at 0
@@ -1731,6 +1745,7 @@ const ThreeScene = (() => {
   }
 
   function onPointerMove(e) {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > LONG_PRESS_SLOP) cancelPress();
     const r = canvasEl.getBoundingClientRect();
     pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
     pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
@@ -1739,7 +1754,35 @@ const ThreeScene = (() => {
     canvasEl.style.cursor = hits.length > 0 ? "pointer" : "default";
   }
 
+  function hitsMailbox(e) {
+    const r = canvasEl.getBoundingClientRect();
+    pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.intersectObject(mailboxGroup, true).length > 0;
+  }
+
+  function onPointerDown(e) {
+    swallowClick = false;
+    cancelPress();
+    if (!onLongPressCb || !hitsMailbox(e)) return;
+    press = {
+      x: e.clientX, y: e.clientY,
+      timer: setTimeout(() => {
+        press = null;
+        swallowClick = true;
+        onLongPressCb();
+      }, LONG_PRESS_MS),
+    };
+  }
+
+  function cancelPress() {
+    if (press) clearTimeout(press.timer);
+    press = null;
+  }
+
   function onCanvasClick(e) {
+    if (swallowClick) { swallowClick = false; return; }
     const r = canvasEl.getBoundingClientRect();
     pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
     pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
@@ -1791,6 +1834,7 @@ const ThreeScene = (() => {
   }
 
   function onMailboxClick(cb) { onClickCb = cb; }
+  function onMailboxLongPress(cb) { onLongPressCb = cb; }
 
   function easeInOutCubic(x) {
     return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
@@ -1858,7 +1902,7 @@ const ThreeScene = (() => {
     camera.lookAt(currentLook);
   }
 
-  return { init, onMailboxClick, cameraTo, setDoorOpen, setEnvelopePile, setLightPosition, dispose, _debugCam };
+  return { init, onMailboxClick, onMailboxLongPress, cameraTo, setDoorOpen, setEnvelopePile, setLightPosition, dispose, _debugCam };
 })();
 
 window.ThreeScene = ThreeScene;

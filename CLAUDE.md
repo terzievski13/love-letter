@@ -18,7 +18,7 @@ code, and don't work from this summary alone:
 | --- | --- |
 | Terrain, mountains, water, sky, sun, fog, the path, rocks, flowers, lighting, anything in three-scene.js | **LANDSCAPE.md** |
 | Push notifications or email, api/, lib/, sw.js, notify.jsx, vercel.json, .github/workflows/, the "did she get told" question | **NOTIFICATIONS.md** |
-| Writing, editing, timing or publishing a letter; letters.jsx | **ADDING-A-LETTER.md** |
+| Writing, editing, timing or publishing a letter; letters.jsx; the secret writing tool (writer.jsx, api/write-letter.js, lib/github.js, the long-press on the mailbox) | **ADDING-A-LETTER.md** |
 
 Anything not in that table — the mailbox model, the camera, the letter
 animation, the React overlay — is covered below.
@@ -133,7 +133,9 @@ landscape rebuild untouched. Leave them alone.
 - React UI overlay in app.jsx; the letter picker (deck) and reader in
   deck.jsx; envelope art + letter unfold in envelope.jsx. The old fan
   component (`Envelope` in envelope.jsx) is no longer used by the site
-- Letter content in letters.jsx — see ADDING-A-LETTER.md
+- Letter content in letters.jsx — see ADDING-A-LETTER.md. Letters can
+  also be written from the site: hold the mailbox ~2s → writer.jsx, which
+  commits letters.jsx via GitHub (same file)
 - Notification code in api/, lib/, sw.js, notify.jsx — see
   NOTIFICATIONS.md
 - tweaks.jsx / tweaks-panel.jsx are a developer tweaking panel, loaded
