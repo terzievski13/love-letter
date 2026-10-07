@@ -132,4 +132,7 @@ landscape rebuild untouched. Leave them alone.
   sees; leave alone unless asked
 - `grass-tuft.glb` in the root is a modeled asset nothing currently
   loads (grass was cut) — keep it, it's regeneratable work
+- picker-lab.html / picker-lab.jsx are a design sandbox for replacing the
+  fanned envelope spread — four prototypes, not loaded by the site. See
+  PICKER-LAB.md
 - Use TypeScript-friendly patterns even though we're in plain JS

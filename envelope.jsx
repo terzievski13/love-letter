@@ -309,3 +309,9 @@ function shade(hex, percent) {
 
 window.Envelope = Envelope;
 window.shade = shade;
+
+/* Additive exports, used only by picker-lab.html (the design sandbox) so the
+   prototypes show the real envelope art and the real letter unfold rather than
+   a copy that would drift. Nothing above this line changed. */
+window.EnvelopeSVG = EnvelopeSVG;
+window.Letter = Letter;

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:,">
+<title>picker lab — four ways to choose a letter</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&display=swap">
+
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #14100e;
+    overflow: hidden;
+    font-family: Fraunces, "Times New Roman", serif;
+    color: #fff3e6;
+    -webkit-font-smoothing: antialiased;
+  }
+  #lab { position: fixed; inset: 0; }
+
+  /* ---------------------------------------------------------------- */
+  /* the developer control bar — deliberately not pretty, not part of  */
+  /* what she ever sees                                               */
+  /* ---------------------------------------------------------------- */
+  .lab { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  .lab-bar {
+    flex: 0 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    padding: 8px 12px;
+    background: #0d0a08;
+    border-bottom: 1px solid #2c221b;
+    font-family: ui-sans-serif, -apple-system, system-ui, sans-serif;
+    font-size: 12px;
+    color: #c9b8a8;
+    z-index: 900;
+  }
+  .grp { display: flex; align-items: center; gap: 6px; }
+  .grp > label {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: #7a6759;
+  }
+  .seg { display: flex; border: 1px solid #33271f; border-radius: 7px; overflow: hidden; }
+  .seg button {
+    appearance: none; border: 0; background: transparent;
+    color: #c0ad9c; font: inherit; padding: 5px 9px; cursor: pointer; white-space: nowrap;
+  }
+  .seg button + button { border-left: 1px solid #33271f; }
+  .seg button:hover { background: #221a14; }
+  .seg button[data-on="1"] { background: #e3c28d; color: #20150f; font-weight: 600; }
+  .seg button[data-on="1"]:hover { background: #e3c28d; }
+  .lab-note { color: #6d5c4e; font-style: italic; margin-left: auto; }
+  .ghost-btn {
+    appearance: none; border: 1px solid #33271f; border-radius: 7px;
+    background: transparent; color: #c0ad9c; font: inherit; padding: 5px 9px; cursor: pointer;
+  }
+  .ghost-btn:hover { background: #221a14; }
+
+  /* ---------------------------------------------------------------- */
+  /* the stage — same warm interior mood as the real mailbox view     */
+  /* ---------------------------------------------------------------- */
+  .lab-stage {
+    flex: 1 1 auto; position: relative; overflow: hidden;
+    display: grid; place-items: center;
+    background: #100c0a;
+  }
+  .stage {
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 42%, #7a5136 0%, #4a3020 38%, #23150d 72%, #150c07 100%);
+  }
+  .stage.is-full { position: absolute; inset: 0; }
+  .stage.is-phone {
+    width: 390px; height: min(844px, 100%);
+    border-radius: 24px;
+    border: 1px solid #3a2e26;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  }
+  .stage-vignette {
+    position: absolute; inset: 0; pointer-events: none; z-index: 400;
+    background: radial-gradient(ellipse at 50% 60%, rgba(20,12,8,0) 25%, rgba(20,12,8,0.8) 78%);
+  }
+  .stage-hint {
+    position: absolute; left: 0; right: 0; top: 18px;
+    text-align: center;
+    font-family: Caveat, cursive; font-size: 24px; color: #fff3e6;
+    opacity: .68; pointer-events: none; z-index: 60;
+  }
+  /* keeps the "pick a letter" hint legible over a scrolling list */
+  .stage-topfade {
+    position: absolute; left: 0; right: 0; top: 0; height: 74px; z-index: 50;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(38,23,14,.92) 30%, rgba(38,23,14,0) 100%);
+  }
+
+  /* shared: the "she hasn't opened this one yet" treatment */
+  @keyframes newPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,206,130,.42), 0 8px 18px rgba(0,0,0,.4); }
+    50%     { box-shadow: 0 0 22px 5px rgba(255,206,130,.30), 0 8px 18px rgba(0,0,0,.4); }
+  }
+  .is-new { animation: newPulse 2.8s ease-in-out infinite; }
+  .is-read { filter: saturate(.86) brightness(.9); }
+  .new-tag {
+    font-family: Caveat, cursive; font-size: 15px; color: #3a2820;
+    background: #ffd79a; border-radius: 999px; padding: 0 8px;
+    line-height: 19px; display: inline-block; white-space: nowrap;
+  }
+
+  /* ============ 1. DECK ============ */
+  .deck { position: absolute; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .deck-card { position: absolute; left: 50%; top: 50%; width: 360px; height: 230px; margin: -115px 0 0 -180px; }
+  .deck-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 42px; height: 42px; border-radius: 21px; z-index: 300;
+    border: 1px solid rgba(255,243,230,.22); background: rgba(20,10,6,.5);
+    color: #fff3e6; font-size: 18px; cursor: pointer; display: grid; place-items: center;
+    backdrop-filter: blur(6px);
+  }
+  .deck-arrow:hover { background: rgba(40,20,12,.8); }
+  .deck-arrow[disabled] { opacity: .18; cursor: default; }
+  .deck-rail {
+    position: absolute; left: 12%; right: 12%; bottom: 46px; height: 26px; z-index: 300;
+    display: flex; align-items: center; touch-action: none; cursor: pointer;
+  }
+  .deck-rail-track { position: relative; height: 3px; width: 100%; border-radius: 2px; background: rgba(255,243,230,.16); }
+  .deck-rail-thumb { position: absolute; top: -3px; height: 9px; border-radius: 5px; background: #e8c79a; }
+  .deck-cap {
+    position: absolute; left: -60px; right: -60px; top: 100%; margin-top: 16px;
+    text-align: center; transition: opacity .3s ease; pointer-events: none;
+  }
+  .deck-cap-title { font-family: Caveat, cursive; font-size: 27px; line-height: 1.15; color: #fff3e6; }
+  .deck-cap-date {
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px;
+    letter-spacing: .12em; text-transform: uppercase; color: rgba(255,243,230,.45); margin-top: 3px;
+  }
+  .deck-pos {
+    position: absolute; left: 0; right: 0; bottom: 74px; text-align: center; z-index: 300;
+    font-family: Caveat, cursive; font-size: 19px; color: rgba(255,243,230,.75);
+  }
+
+  /* ============ 2. DRAWER ============ */
+  .drawer { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+            -webkit-overflow-scrolling: touch; touch-action: pan-y;
+            padding: 64px 0 120px; scrollbar-width: thin;
+            display: flex; flex-direction: column; }
+  .drawer-inner { width: min(430px, 90%); margin: auto; }
+  .drawer-item {
+    position: relative; display: block; width: 100%; text-align: left;
+    border: 0; padding: 15px 16px 40px; cursor: pointer;
+    border-radius: 10px 10px 3px 3px;
+    margin-top: -36px;
+    box-shadow: 0 -1px 0 rgba(255,255,255,.42) inset, 0 -9px 14px -6px rgba(0,0,0,.55),
+                0 14px 20px -6px rgba(0,0,0,.5);
+    transition: transform .22s cubic-bezier(.3,1.3,.5,1);
+    font: inherit;
+    transform: translateX(var(--dx, 0px)) rotate(var(--rot, 0deg));
+  }
+  .drawer-item:hover, .drawer-item:focus-visible {
+    transform: translateX(var(--dx, 0px)) rotate(var(--rot, 0deg)) translateY(-9px);
+  }
+  .drawer-item:first-child { margin-top: 0; }
+  .drawer-item:hover, .drawer-item:focus-visible { outline: none; }
+  .drawer-row { display: flex; align-items: center; gap: 10px; }
+  .drawer-title {
+    font-family: Caveat, cursive; font-size: 21px; line-height: 1.15;
+    flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .drawer-date { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 10.5px;
+                 letter-spacing: .05em; opacity: .62; white-space: nowrap; flex: 0 0 auto; }
+  .drawer-seam { position: absolute; left: 0; right: 0; top: 0; height: 100%; pointer-events: none;
+                 opacity: .34; }
+  .drawer-edge { position: absolute; left: 0; right: 0; bottom: 0; height: 12px;
+                 border-radius: 0 0 3px 3px; background: rgba(0,0,0,.09); }
+
+  /* ============ 3. TIMELINE ============ */
+  .timeline { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+              -webkit-overflow-scrolling: touch; touch-action: pan-y;
+              padding: 58px 0 90px; display: flex; flex-direction: column; }
+  .timeline-inner { width: min(430px, 92%); margin: auto; position: relative; }
+  .tl-month {
+    position: sticky; top: 4px; z-index: 30;
+    padding: 14px 0 6px 22px;
+    pointer-events: none;
+  }
+  .tl-month b {
+    display: inline-block; pointer-events: auto;
+    padding: 4px 12px; border-radius: 999px;
+    background: rgba(28,16,10,.82);
+    border: 1px solid rgba(255,243,230,.12);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    font-family: Fraunces, serif; font-style: italic; font-weight: 400; font-size: 13.5px;
+    color: #f0d9bb;
+  }
+  .tl-month span { font-family: ui-sans-serif, system-ui, sans-serif; font-style: normal;
+                   font-size: 10px; opacity: .5; margin-left: 8px; letter-spacing: .05em; }
+  .tl-item {
+    position: relative; display: flex; align-items: center; gap: 13px;
+    width: 100%; padding: 9px 12px 9px 22px; margin: 0 0 4px;
+    background: transparent; border: 0; border-radius: 10px;
+    cursor: pointer; text-align: left; font: inherit; color: #fff3e6;
+  }
+  .tl-item:hover, .tl-item:focus-visible { background: rgba(255,243,230,.07); outline: none; }
+  .tl-thread { position: absolute; left: 35px; top: 0; bottom: 0; width: 2px;
+               background: linear-gradient(180deg, rgba(255,243,230,.04), rgba(255,243,230,.3) 8%, rgba(255,243,230,.3) 92%, rgba(255,243,230,.04)); }
+  .tl-text { min-width: 0; flex: 1 1 auto; }
+  .tl-title { font-family: Caveat, cursive; font-size: 20px; line-height: 1.2;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-date { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 10px;
+             letter-spacing: .06em; opacity: .5; margin-top: 1px; }
+
+  /* ============ 4. WALL ============ */
+  .wall { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+          touch-action: pan-y; padding: 58px 0 90px; display: flex; flex-direction: column; }
+  .wall-inner {
+    width: min(920px, 90%); margin: auto;
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .wall-card {
+    position: relative; border: 0; cursor: pointer; font: inherit;
+    border-radius: 5px; padding: 0; overflow: hidden;
+    aspect-ratio: 360 / 230;
+    box-shadow: 0 8px 16px rgba(0,0,0,.42);
+    transition: transform .18s ease;
+    display: block; text-align: left;
+  }
+  .wall-card:hover, .wall-card:focus-visible { transform: translateY(-4px); outline: none; }
+  .wall-flap { position: absolute; left: 0; right: 0; top: 0; height: 50%; }
+  .wall-seam { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wall-meta { position: absolute; left: 9px; right: 9px; bottom: 7px; }
+  .wall-title { font-family: Caveat, cursive; font-size: 17px; line-height: 1.1;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wall-date { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9px;
+               letter-spacing: .05em; opacity: .6; }
+
+  /* ============ reader overlay ============ */
+  .reader { position: fixed; inset: 0; z-index: 1000; }
+  .reader-scrim { position: absolute; inset: 0; background: rgba(12,7,4,.72);
+                  transition: opacity .45s ease; }
+  .reader-ghost { position: absolute; left: 50%; top: 50%; width: 360px; height: 230px;
+                  margin: -115px 0 0 -180px; filter: drop-shadow(0 24px 36px rgba(0,0,0,.45));
+                  perspective: 1000px; transform-style: preserve-3d; }
+  .reader-close-hint {
+    position: absolute; left: 24px; top: 24px; z-index: 1100;
+    padding: 11px 20px; border-radius: 999px;
+    border: 1px solid rgba(255,243,230,.25); background: rgba(20,10,6,.55);
+    color: #fff3e6; font-family: Fraunces, serif; font-style: italic; font-size: 13px;
+    cursor: pointer; backdrop-filter: blur(8px);
+  }
+  .reader-close-hint:hover { background: rgba(40,20,12,.85); }
+
+  /* brings the control bar back when it has been hidden for a clean look */
+  .bar-peek {
+    position: fixed; top: 10px; right: 10px; z-index: 950;
+    width: 34px; height: 34px; border-radius: 17px;
+    border: 1px solid rgba(255,243,230,.2); background: rgba(20,10,6,.5);
+    color: rgba(255,243,230,.75); font-size: 15px; cursor: pointer;
+    backdrop-filter: blur(6px); display: grid; place-items: center;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  @media (max-width: 520px) {
+    .lab-bar { gap: 6px 10px; padding: 6px 8px; font-size: 11px; }
+    .lab-note { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div id="lab"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- the real letter data and the real envelope / letter components -->
+  <script type="text/babel" src="letters.jsx"></script>
+  <script type="text/babel" src="envelope.jsx"></script>
+  <script type="text/babel" src="picker-lab.jsx"></script>
+</body>
+</html>
