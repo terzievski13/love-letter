@@ -19,7 +19,7 @@ on the site.
 | | |
 | --- | --- |
 | **A · switch** | a "от мен \| от теб" switch at the top flips the whole pile |
-| **B · bundle** | your letters stay the main pile; hers are a tied bundle in the corner that opens into its own pile |
+| **B · bundle** | your letters stay the main pile; hers are a tied bundle in the bottom-right corner that opens into its own pile |
 | **C · shelves** | two shelves, "писма от мен" and "писма от теб", changed with the arrows in the heading |
 
 C changes shelves with arrows rather than a swipe on purpose: a sideways
@@ -47,9 +47,9 @@ them, ☰ (bottom-left) brings them back.
 
 - **layout** — A, B or C
 - **her letters** — 0, 1, 5 or 20 sample letters
-- **frame** — fill the window, or a phone-sized frame on a desktop screen
-  (only roughly phone-like: the page still sizes itself for the big
-  window — use a real phone for the honest version)
+- **frame** — fill the window, or a phone frame on a desktop screen. The
+  phone frame runs the lab inside a real 390px-wide window, so it lays
+  itself out exactly as it would on a phone (its controls follow the bar)
 - **reset** — forget the secret word and any letters written while playing
 
 Every control is in the address bar, e.g.

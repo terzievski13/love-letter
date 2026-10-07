@@ -80,11 +80,12 @@
   }
   .stage.is-full { position: absolute; inset: 0; }
   .stage.is-phone {
-    width: 390px; height: min(844px, 100%);
+    width: 392px; height: min(846px, 100%);
     border-radius: 24px;
     border: 1px solid #3a2e26;
     box-shadow: 0 20px 60px rgba(0,0,0,.6);
   }
+  .stage.is-phone iframe { display: block; width: 390px; height: 100%; border: 0; border-radius: 23px; }
   .stage-vignette {
     position: absolute; inset: 0; pointer-events: none; z-index: 0;
     background: radial-gradient(ellipse at 50% 60%, rgba(20,12,8,0) 25%, rgba(20,12,8,0.8) 78%);
@@ -205,7 +206,7 @@
 
   /* B: the tied bundle */
   .bundle {
-    position: absolute; right: 22px; top: 92px; z-index: 320;
+    position: absolute; right: 26px; bottom: 118px; z-index: 320;
     width: 112px; height: 92px; cursor: pointer;
     appearance: none; border: 0; background: transparent; padding: 0;
   }
@@ -315,7 +316,7 @@
     .inside-hint { top: 14%; }
     .reader-stage { transform: scale(0.8); transform-origin: 50% 50%; }
     .switch { top: 70px; }
-    .bundle { top: 84px; right: 12px; transform: scale(.82); transform-origin: top right; }
+    .bundle { bottom: 124px; right: 14px; transform: scale(.82); transform-origin: bottom right; }
     .pill-btn { font-size: 18px; padding: 8px 14px; }
   }
   @media (max-width: 520px) {

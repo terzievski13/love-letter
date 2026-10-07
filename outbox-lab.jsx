@@ -106,7 +106,8 @@ function markRead(ids) {
 
 /* ---------------- url state ---------------- */
 
-const DEFAULTS = { view: "switch", n: "5", frame: "full", bar: "1" };
+// embed=1 is the copy of the lab running inside the phone frame
+const DEFAULTS = { view: "switch", n: "5", frame: "full", bar: "1", embed: "0" };
 function readParams() {
   const q = new URLSearchParams(location.hash.replace(/^#/, ""));
   const p = { ...DEFAULTS };
@@ -406,6 +407,7 @@ function Lab() {
   const [composer, setComposer] = useState(null); // null | { initial }
   const [wordKnown, setWordKnown] = useState(() => { try { return localStorage.getItem(WORD_KEY) === "1"; } catch (e) { return false; } });
   const [toast, setToast] = useState(null);
+  const [frameKey, setFrameKey] = useState(0);   // remounts the phone frame on reset
 
   function replaceHers(next) {
     markRead(next.map((l) => l.id));
@@ -467,18 +469,31 @@ function Lab() {
             try { localStorage.removeItem(WORD_KEY); } catch (e) {}
             setWordKnown(false);
             replaceHers(makeHers(Number(p.n)));
+            setFrameKey((k) => k + 1);
           }}>reset</button>
           <button className="ghost-btn" onClick={() => set("bar", "0")}>hide this bar</button>
           <span className="lab-note">sandbox — nothing is sent or saved anywhere</span>
         </div>
       )}
-      {p.bar !== "1" && <button className="bar-peek" onClick={() => set("bar", "1")}>☰</button>}
+      {p.bar !== "1" && p.embed !== "1" && <button className="bar-peek" onClick={() => set("bar", "1")}>☰</button>}
 
       <div className="lab-stage">
-        <div className={"stage " + (p.frame === "phone" ? "is-phone" : "is-full")}>
-          <div className="stage-vignette" />
-          <View key={p.view} {...viewProps} />
-        </div>
+        {p.frame === "phone" ? (
+          /* A real 390px-wide window, so the layout sizes itself exactly as it
+             would on a phone, rather than a desktop-sized page in a small box. */
+          <div className="stage is-phone">
+            <iframe
+              key={frameKey}
+              title="phone"
+              src={`outbox-lab.html#view=${p.view}&n=${p.n}&bar=0&embed=1`}
+            />
+          </div>
+        ) : (
+          <div className="stage is-full">
+            <div className="stage-vignette" />
+            <View key={p.view} {...viewProps} />
+          </div>
+        )}
       </div>
 
       {composer && (
