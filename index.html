@@ -44,10 +44,64 @@
     animation: fadeIn 0.7s ease both;
   }
 
-  .letter-stage {
-    position: absolute; inset: 0;
-    perspective: 1400px;
-    perspective-origin: 50% 30%;
+  /* ---- the letter deck (deck.jsx) ---- */
+  .deck { position: absolute; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .deck-card { position: absolute; left: 50%; top: 50%; width: 360px; height: 230px; margin: -115px 0 0 -180px; cursor: pointer; }
+  .deck-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 42px; height: 42px; border-radius: 21px; z-index: 300;
+    border: 1px solid rgba(255,243,230,.22); background: rgba(20,10,6,.5);
+    color: #fff3e6; font-size: 18px; cursor: pointer; display: grid; place-items: center;
+    backdrop-filter: blur(6px);
+  }
+  .deck-arrow:hover { background: rgba(40,20,12,.8); }
+  .deck-arrow[disabled] { opacity: .18; cursor: default; }
+  .deck-rail {
+    position: absolute; left: 12%; right: 12%; bottom: 46px; height: 26px; z-index: 300;
+    display: flex; align-items: center; touch-action: none; cursor: pointer;
+  }
+  .deck-rail-track { position: relative; height: 3px; width: 100%; border-radius: 2px; background: rgba(255,243,230,.16); }
+  .deck-rail-thumb { position: absolute; top: -3px; height: 9px; border-radius: 5px; background: #e8c79a; }
+  .deck-cap {
+    position: absolute; left: -60px; right: -60px; top: 100%; margin-top: 16px;
+    text-align: center; transition: opacity .3s ease; pointer-events: none;
+  }
+  .deck-cap-title { font-family: Caveat, cursive; font-size: 27px; line-height: 1.15; color: #fff3e6; }
+  .deck-cap-date {
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px;
+    letter-spacing: .12em; text-transform: uppercase; color: rgba(255,243,230,.45); margin-top: 3px;
+  }
+  .deck-pos {
+    position: absolute; left: 0; right: 0; bottom: 74px; text-align: center; z-index: 300;
+    font-family: Caveat, cursive; font-size: 19px; color: rgba(255,243,230,.75);
+  }
+  /* while the "should I ring you?" prompt is up, it owns the bottom of the
+     screen — the counter and slider move up above it */
+  .interior:has(.notify-slot > *) .deck-pos { bottom: 178px; }
+  .interior:has(.notify-slot > *) .deck-rail { bottom: 150px; }
+
+  /* a letter she hasn't opened yet glows softly and gets a "ново" tag */
+  @keyframes newPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,206,130,.42), 0 8px 18px rgba(0,0,0,.4); }
+    50%     { box-shadow: 0 0 22px 5px rgba(255,206,130,.30), 0 8px 18px rgba(0,0,0,.4); }
+  }
+  .is-new { animation: newPulse 2.8s ease-in-out infinite; }
+  .is-read { filter: saturate(.86) brightness(.9); }
+  .new-tag {
+    font-family: Caveat, cursive; font-size: 15px; color: #3a2820;
+    background: #ffd79a; border-radius: 999px; padding: 0 8px;
+    line-height: 19px; display: inline-block; white-space: nowrap;
+  }
+
+  /* the open letter, over a dimmed mailbox */
+  .reader { position: fixed; inset: 0; z-index: 1000; }
+  .reader-scrim { position: absolute; inset: 0; background: rgba(12,7,4,.72); }
+  .reader-stage { position: absolute; inset: 0; pointer-events: none; }
+  .reader-stage > * { pointer-events: auto; }
+  .reader-ghost {
+    position: absolute; left: 50%; top: 50%; width: 360px; height: 230px;
+    margin: -115px 0 0 -180px; filter: drop-shadow(0 24px 36px rgba(0,0,0,.45));
+    perspective: 1000px; transform-style: preserve-3d;
   }
 
   .back-btn {
@@ -130,7 +184,9 @@
     .title-sub { font-size: 12px; }
     .back-btn { padding: 9px 16px; font-size: 12px; }
     .inside-hint { top: 14%; }
-    .letter-stage {
+    /* the open letter reads at 80% on phones, as it always has
+       (READER_SCALE in deck.jsx must match) */
+    .reader-stage {
       transform: scale(0.8);
       transform-origin: 50% 50%;
     }
@@ -162,6 +218,7 @@
   <script type="text/babel" src="tweaks-panel.jsx"></script>
   <script type="text/babel" src="letters.jsx"></script>
   <script type="text/babel" src="envelope.jsx"></script>
+  <script type="text/babel" src="deck.jsx"></script>
   <script type="text/babel" src="notify.jsx"></script>
   <script type="text/babel" src="app.jsx"></script>
   <script type="text/babel" src="tweaks.jsx"></script>

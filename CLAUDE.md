@@ -57,10 +57,18 @@ These are finished and confirmed good. They have survived every
 landscape rebuild untouched. Leave them alone.
 
 ### Letter flow (perfect — do not touch)
-- "Pick a letter" view: fanned envelope spread inside mailbox, each 
-  envelope individually clickable, wax seal, handwritten labels
-- Click envelope → letter unfolds, handwritten text appears line by line
-- "Back to mailbox" button closes letter and returns to spread
+- "Pick a letter" view: a deck (deck.jsx) — one envelope centred, its
+  neighbours tilted and darkened either side. Swipe, arrow buttons,
+  arrow keys, or the slider along the bottom move through it; only five
+  envelopes are ever drawn, so it works at any number of letters.
+  Newest letter first. Replaced the fanned spread in Oct 2026 because
+  the fan became impossible to click precisely even at 5 letters
+- Letters she hasn't opened glow softly and get a "ново" tag. "Opened"
+  is remembered per device in localStorage (`letters:read`); the first
+  time a device runs it, everything already in the mailbox counts as read
+- Tap the centre envelope → it flies to the middle, flap opens, letter
+  unfolds, handwritten text appears line by line (Letter, envelope.jsx)
+- "Back to mailbox" button closes letter and returns to the same envelope
 - Handwritten font (Caveat), beautiful Fraunces serif in titles
 
 ### Camera & navigation (confirmed working)
@@ -122,8 +130,9 @@ landscape rebuild untouched. Leave them alone.
   `api/` (server endpoints), `lib/` (server helpers), `flowers/` and
   `objects/` (.glb models used by the scene)
 - 3D scene logic in three-scene.js — see LANDSCAPE.md
-- React UI overlay in app.jsx; envelope + letter components in
-  envelope.jsx
+- React UI overlay in app.jsx; the letter picker (deck) and reader in
+  deck.jsx; envelope art + letter unfold in envelope.jsx. The old fan
+  component (`Envelope` in envelope.jsx) is no longer used by the site
 - Letter content in letters.jsx — see ADDING-A-LETTER.md
 - Notification code in api/, lib/, sw.js, notify.jsx — see
   NOTIFICATIONS.md
@@ -132,7 +141,7 @@ landscape rebuild untouched. Leave them alone.
   sees; leave alone unless asked
 - `grass-tuft.glb` in the root is a modeled asset nothing currently
   loads (grass was cut) — keep it, it's regeneratable work
-- picker-lab.html / picker-lab.jsx are a design sandbox for replacing the
-  fanned envelope spread — four prototypes, not loaded by the site. See
+- picker-lab.html / picker-lab.jsx are the design sandbox where the deck
+  was chosen over three other pickers — not loaded by the site. See
   PICKER-LAB.md
 - Use TypeScript-friendly patterns even though we're in plain JS

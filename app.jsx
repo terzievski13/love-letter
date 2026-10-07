@@ -14,9 +14,11 @@ function App() {
   const data = window.LETTERS_DATA;
   // letters with an unlockAt stay hidden until that instant passes (compares absolute
   // time, so it fires at the same moment regardless of the viewer's own timezone)
+  // the file lists letters oldest first; the deck shows the newest first
   const visibleLetters = data.letters.filter(
     (l) => !l.unlockAt || Date.now() >= new Date(l.unlockAt).getTime()
-  );
+  ).reverse();
+  const openLetterData = visibleLetters.find((l) => l.id === openLetterId) || null;
 
   useE(() => {
     if (initedRef.current) return;
@@ -65,29 +67,22 @@ function App() {
       {/* warm vignette during interior — fades in only after camera arrives */}
       <div className="vignette" style={{ opacity: showVignette ? 0.7 : 0 }} />
 
-      {/* INSIDE — letters fanned out (only mount after camera arrives) */}
+      {/* INSIDE — the letter deck (only mounts after camera arrives) */}
       {showInterior && (
         <div className="interior">
-          <div className="letter-stage">
-            {visibleLetters.map((l, i) => (
-              <window.Envelope
-                key={l.id}
-                letter={l}
-                idx={i}
-                total={visibleLetters.length}
-                isOpen={openLetterId === l.id}
-                onClick={() => openLetter(l.id)}
-                onClose={closeLetter}
-              />
-            ))}
-          </div>
+          <window.LetterDeck
+            letters={visibleLetters}
+            openLetter={openLetterData}
+            onOpen={openLetter}
+            onClose={closeLetter}
+          />
 
-          <button className="back-btn" onClick={() => {
-            if (openLetterId !== null) closeLetter();
-            else backToOutside();
-          }}>
-            ← {openLetterId !== null ? "back to mailbox" : "back outside"}
-          </button>
+          {/* while a letter is open, the reader shows its own "back to mailbox" */}
+          {openLetterId === null && (
+            <button className="back-btn" onClick={backToOutside}>
+              ← back outside
+            </button>
+          )}
 
           {stage === "inside" && !openLetterId && (
             <div className="inside-hint">pick a letter</div>
@@ -95,7 +90,11 @@ function App() {
 
           {/* asks once whether the mailbox may notify her; manages its own
               state and hides itself for good once answered */}
-          {stage === "inside" && !openLetterId && <window.NotifyPrompt />}
+          {/* the slot lets the deck lift its counter and slider clear of
+              the prompt while it's showing (see .notify-slot in index.html) */}
+          {stage === "inside" && !openLetterId && (
+            <div className="notify-slot"><window.NotifyPrompt /></div>
+          )}
         </div>
       )}
 

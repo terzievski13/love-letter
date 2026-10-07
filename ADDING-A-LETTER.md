@@ -72,7 +72,8 @@ You can push a timed letter days in advance. That's the point of it.
   server finds the letters.
 - **Keep the settings after the letters list** (`"scene"`, `"palette"`,
   `"handwriting"`, `"showFlag"`) — they belong to the same block.
-- Letters appear in the mailbox in the order they're written in the file.
+- The mailbox shows the **last** letter in the file first, so add new
+  letters at the end of the list.
 
 ## Check before you push
 

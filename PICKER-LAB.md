@@ -1,8 +1,15 @@
 # The picker lab
 
 A sandbox for choosing what replaces the fanned envelope spread. It is
-**not part of the site** — nothing in `index.html` loads it, and the live
-experience is exactly as it was.
+**not part of the site** — nothing in `index.html` loads it.
+
+**Outcome (Oct 2026): the Deck won** and is now the real picker, in
+`deck.jsx`. The site's version differs from the lab's in a few ways
+forced by the real scene: side envelopes darken instead of turning
+see-through (the landscape showed through them), the counter and slider
+move up while the notification prompt is showing, and the open letter
+is shown at 80% on phones as it always was. The lab is kept for
+reference; its Deck is not kept in sync with `deck.jsx`.
 
     python3 -m http.server 8123
 
