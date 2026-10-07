@@ -1,7 +1,8 @@
 # Notifications
 
 How she finds out a letter has arrived: a push notification to her phone,
-plus an email as backup. Added 2026-08-22. Read this before touching
+plus an email as backup — **but the email half is not switched on** (see
+below). Added 2026-08-22. Read this before touching
 anything in api/, lib/, sw.js, notify.jsx, vercel.json or
 .github/workflows/. Writing a letter itself needs none of this — see
 ADDING-A-LETTER.md.
@@ -79,6 +80,15 @@ Run `npm test` for the offline test suite (40 checks, no network, nothing
 sent): duplicate suppression, the backlog guard, simultaneous triggers,
 timed unlocks, dead-subscription pruning, delivery failure and retry, and
 the subscribe endpoint's validation.
+
+**Email is not configured (confirmed 2026-10-07).** The first letter
+published from the writing tool was announced by push (2 devices, no
+failures) but the run reported `mailResult: "Gmail credentials or HER_EMAIL
+not set"`. So today there is no email backup for her and no receipt email
+for you — push is the only channel. The code is all there; switching it on
+means adding `GMAIL_USER`, `GMAIL_APP_PASSWORD` (a Google *app password*,
+not the normal one), `HER_EMAIL` and `MY_EMAIL` on Vercel and redeploying.
+`?dry=1` reports `"email": "ready"` once it works.
 
 Environment variables (Vercel): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
 `VAPID_SUBJECT`, `NOTIFY_SECRET`, `CRON_SECRET` (same value),
