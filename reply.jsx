@@ -127,6 +127,35 @@ function hasUnread(hers) {
   }
 }
 
+/* ---------------- the phone keyboard ----------------
+   On an iPhone the keyboard covers the page without making it shorter, so a
+   form centred on the screen ends up half behind it (and this page can't
+   scroll). This follows the part of the screen actually visible above the
+   keyboard; a full-screen overlay given this style centres itself there.
+   Used by her writing screen and by your writing tool (writer.jsx). */
+
+function readVisibleArea() {
+  const v = window.visualViewport;
+  return v ? { top: v.offsetTop, height: v.height } : null;
+}
+
+function useVisibleArea() {
+  const [area, setArea] = useRS(readVisibleArea);
+  useRE(() => {
+    const v = window.visualViewport;
+    if (!v) return;
+    const update = () => setArea(readVisibleArea());
+    v.addEventListener("resize", update);
+    v.addEventListener("scroll", update);
+    update();
+    return () => {
+      v.removeEventListener("resize", update);
+      v.removeEventListener("scroll", update);
+    };
+  }, []);
+  return area ? { top: area.top, height: area.height, bottom: "auto" } : undefined;
+}
+
 /* ---------------- the bundle ---------------- */
 
 function HerBundle({ hers, onClick }) {
@@ -210,6 +239,7 @@ function HerSwatches({ colors, value, onChange, label }) {
 
 /** onDone({ letter, letters, edited }) once the server has it. */
 function HerComposer({ initial, onDone, onCancel }) {
+  const visible = useVisibleArea();
   const isNew = !initial;
   const draft = isNew ? (() => { try { return JSON.parse(herRecall(HER_DRAFT) || "null"); } catch (e) { return null; } })() : null;
   const start = initial || draft || {};
@@ -278,7 +308,8 @@ function HerComposer({ initial, onDone, onCancel }) {
   return (
     // stopPropagation keeps the deck's arrow keys (and the open letter's
     // Escape) away from her typing; deliberately not click-to-close
-    <div className="composer-wrap" onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") onCancel(); }}>
+    <div className="composer-wrap" style={visible}
+         onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") onCancel(); }}>
       {step === "word" ? (
         <form className="composer" onSubmit={(e) => { e.preventDefault(); tryWord(); }}>
           <h2>{HER_COPY.wordTitle}</h2>
@@ -322,6 +353,8 @@ function HerComposer({ initial, onDone, onCancel }) {
     </div>
   );
 }
+
+window.useVisibleArea = useVisibleArea;
 
 window.HerLetters = {
   COPY: HER_COPY,

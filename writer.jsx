@@ -274,6 +274,8 @@ function Writer({ onClose }) {
   const [busy, setBusy] = useWS(false);
   const [error, setError] = useWS("");
   const [done, setDone] = useWS(null);
+  // keeps the card above the phone keyboard (defined in reply.jsx)
+  const visible = window.useVisibleArea();
 
   async function open(withKey) {
     setBusy(true); setError("");
@@ -396,7 +398,7 @@ function Writer({ onClose }) {
 
   return (
     // stopPropagation keeps typing (arrow keys etc.) away from anything else listening
-    <div className="writer" onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}>
+    <div className="writer" style={visible} onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}>
       {/* deliberately not click-to-close: a stray tap would lose an edit */}
       <div className="writer-scrim" />
       <div className="writer-scroll">

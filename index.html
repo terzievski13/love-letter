@@ -151,6 +151,9 @@
     pointer-events: none;
     z-index: 5;
     animation: bobSm 3s ease-in-out infinite;
+    /* room for the handwriting's overhang: iPhone Safari clips letters that
+       lean outside an animated box (the "б" of "писма от теб") */
+    padding: 0 12px; white-space: nowrap;
   }
 
   .title {
