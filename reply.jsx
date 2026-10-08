@@ -131,7 +131,8 @@ function hasUnread(hers) {
    On an iPhone the keyboard covers the page without making it shorter, so a
    form centred on the screen ends up half behind it (and this page can't
    scroll). This follows the part of the screen actually visible above the
-   keyboard; a full-screen overlay given this style centres itself there.
+   keyboard; the box given this style sits exactly there, while the dimmed
+   backdrop behind it stays full-screen.
    Used by her writing screen and by your writing tool (writer.jsx). */
 
 function readVisibleArea() {
@@ -308,8 +309,8 @@ function HerComposer({ initial, onDone, onCancel }) {
   return (
     // stopPropagation keeps the deck's arrow keys (and the open letter's
     // Escape) away from her typing; deliberately not click-to-close
-    <div className="composer-wrap" style={visible}
-         onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") onCancel(); }}>
+    <div className="composer-wrap" onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") onCancel(); }}>
+      <div className="composer-area" style={visible}>
       {step === "word" ? (
         <form className="composer" onSubmit={(e) => { e.preventDefault(); tryWord(); }}>
           <h2>{HER_COPY.wordTitle}</h2>
@@ -350,6 +351,7 @@ function HerComposer({ initial, onDone, onCancel }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

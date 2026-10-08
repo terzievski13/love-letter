@@ -398,10 +398,10 @@ function Writer({ onClose }) {
 
   return (
     // stopPropagation keeps typing (arrow keys etc.) away from anything else listening
-    <div className="writer" style={visible} onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}>
+    <div className="writer" onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}>
       {/* deliberately not click-to-close: a stray tap would lose an edit */}
       <div className="writer-scrim" />
-      <div className="writer-scroll">
+      <div className="writer-scroll" style={visible}>
         {content}
       </div>
       <button className="writer-close" aria-label="close" onClick={onClose}>×</button>
