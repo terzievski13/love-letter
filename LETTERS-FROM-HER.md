@@ -14,6 +14,11 @@ of `lib/store.js`, `api/subscribe.js` and `app.jsx`.
   it asks for the **secret word**, checks it with the server, and remembers
   it (localStorage `mailbox:her-word`). It never asks again on that device
   unless the word changes. An unsent letter is kept in `mailbox:her-draft`.
+- **Phone keyboard**: on an iPhone the keyboard covers the page without
+  shrinking it, and this page can't scroll, so a centred form would hide
+  behind it. `useVisibleArea()` in `reply.jsx` (also used by `writer.jsx`)
+  sizes the overlay to the part of the screen above the keyboard
+  (`window.visualViewport`).
 - **Edit / delete**: buttons under her open letter, but **only on a device
   that knows the word**. Delete takes two taps.
 - **Saved in Redis**, not in letters.jsx: she can't commit to GitHub, and
