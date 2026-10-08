@@ -89,6 +89,15 @@ function recall(key) {
 
 const WRITER_NOTIFY_ME = "mailbox:notify-me"; // this device is subscribed as yours
 
+// in Bulgarian, like the rest of what the mailbox says out loud
+const NOTIFY_ME_COPY = {
+  ask: "🔔 звънни ми, когато тя ми пише",
+  working: "секунда...",
+  on: "✓ ще звъня тук, когато тя ти пише",
+  blocked: "Известията за сайта са спрени — разреши ги в настройките на браузъра и опитай пак.",
+  failed: "Не стана — опитай пак след малко.",
+};
+
 function NotifyMe({ writerKey }) {
   // idle | working | on | blocked | failed
   const [state, setState] = useWS(() => (recall(WRITER_NOTIFY_ME) === "1" ? "on" : "idle"));
@@ -117,14 +126,14 @@ function NotifyMe({ writerKey }) {
     <div className="writer-notify">
       {state === "on" ? (
         // tapping again re-sends it - harmless, and heals a lost subscription
-        <button className="writer-link" onClick={turnOn}>✓ this device buzzes when she writes</button>
+        <button className="writer-link" onClick={turnOn}>{NOTIFY_ME_COPY.on}</button>
       ) : (
         <button className="writer-link" onClick={turnOn} disabled={state === "working"}>
-          {state === "working" ? "asking…" : "🔔 tell me when she writes"}
+          {state === "working" ? NOTIFY_ME_COPY.working : NOTIFY_ME_COPY.ask}
         </button>
       )}
-      {state === "blocked" && <div className="writer-hint">Notifications are blocked for this site — allow them in the browser settings, then try again.</div>}
-      {state === "failed" && <div className="writer-error">That didn't work — try again in a moment.</div>}
+      {state === "blocked" && <div className="writer-hint">{NOTIFY_ME_COPY.blocked}</div>}
+      {state === "failed" && <div className="writer-error">{NOTIFY_ME_COPY.failed}</div>}
     </div>
   );
 }

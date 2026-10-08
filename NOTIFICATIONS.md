@@ -80,7 +80,7 @@ Things that will bite you:
 (LETTERS-FROM-HER.md), `api/her-letters.js` pushes to *your* phone via
 `sendPushToMe` in `lib/send.js`. Your phone lives in its own Redis hash,
 `letters:my-subs`, filled by `/api/subscribe?who=me` (needs
-`WRITER_PASSWORD`; the writer's "🔔 tell me when she writes" calls it).
+`WRITER_PASSWORD`; the writer's "🔔 звънни ми, когато тя ми пише" calls it).
 The two lists never mix: subscribing as "me" removes that phone from her
 `letters:subs`, and her plain subscribe path ignores a phone that's in
 `my-subs`. Same `sw.js`, same VAPID keys.

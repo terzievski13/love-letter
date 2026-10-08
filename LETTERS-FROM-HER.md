@@ -45,7 +45,8 @@ A **new** letter from her pushes to your phone: `Писмо от нея 💌` /
 save.
 
 To switch it on: on your phone, hold the mailbox → writer →
-**"🔔 tell me when she writes"**. That subscribes the phone to
+**"🔔 звънни ми, когато тя ми пише"** (wording: `NOTIFY_ME_COPY` in
+`writer.jsx`). That subscribes the phone to
 `/api/subscribe?who=me` (it needs your writer password). The phone is stored
 in its own list, `letters:my-subs`, and removed from her list (`letters:subs`).
 After that:
