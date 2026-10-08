@@ -23,6 +23,10 @@
     font-family: Fraunces, "Times New Roman", serif;
     color: #3a2820;
     -webkit-font-smoothing: antialiased;
+    /* phones paint a translucent (often blue) flash over whatever element
+       "owns" the tap. React listens for taps on the whole-screen #app, so
+       without this the entire screen flashes on every tap */
+    -webkit-tap-highlight-color: transparent;
   }
   #app, .root { position: fixed; inset: 0; overflow: hidden; }
 
