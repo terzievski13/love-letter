@@ -113,8 +113,12 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
   const dark = shade(c, -25);
   const lite = shade(c, 8);
   const wax = letter.wax;
+  const waxHi = shade(wax, 34);
+  const waxDark = shade(wax, -30);
+  const waxDeep = shade(wax, -52);
   const w = small ? 240 : 360;
   const h = small ? 154 : 230;
+  const k = `${letter.id}${small ? "s" : ""}`;
 
   return (
     <svg viewBox="0 0 360 230" width={w} height={h}
@@ -134,6 +138,27 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
           <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed={letter.id % 9} />
           <feColorMatrix values="0 0 0 0 0.4   0 0 0 0 0.3   0 0 0 0 0.2   0 0 0 0.08 0" />
           <feComposite in2="SourceGraphic" operator="in" />
+        </filter>
+        {/* wax seal: lit from the top-left; its shadow is a soft gradient rather
+            than an SVG filter, because the seal rides on the flap's 3D rotation
+            and WebKit renders filters inside 3D-transformed content unreliably */}
+        <radialGradient id={`seal-${k}`} cx="0.34" cy="0.28" r="0.85">
+          <stop offset="0%" stopColor={waxHi} />
+          <stop offset="50%" stopColor={wax} />
+          <stop offset="100%" stopColor={waxDark} />
+        </radialGradient>
+        <radialGradient id={`seal-shadow-${k}`}>
+          <stop offset="0%" stopColor="#24100a" stopOpacity="0.5" />
+          <stop offset="78%" stopColor="#24100a" stopOpacity="0.42" />
+          <stop offset="100%" stopColor="#24100a" stopOpacity="0" />
+        </radialGradient>
+        {/* engraved stamp: fine vertical hatching in the wax colour */}
+        <pattern id={`stamp-hatch-${k}`} patternUnits="userSpaceOnUse" width="2.2" height="2.2">
+          <rect x="0" y="0" width="2.2" height="2.2" fill={shade(wax, 100)} />
+          <line x1="0.5" y1="0" x2="0.5" y2="2.2" stroke={wax} strokeWidth="0.55" opacity="0.5" />
+        </pattern>
+        <filter id={`stamp-shadow-${k}`} x="-30%" y="-30%" width="160%" height="170%">
+          <feDropShadow dx="0.5" dy="1.8" stdDeviation="1.5" floodColor="#2a140c" floodOpacity="0.38" />
         </filter>
       </defs>
 
@@ -157,18 +182,13 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
         opacity: isOpen ? 0 : 1,
         transition: "opacity 0.3s ease"
       }}>
-        <line x1="120" y1="120" x2="280" y2="120" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-        <line x1="120" y1="140" x2="260" y2="140" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-        <line x1="120" y1="160" x2="270" y2="160" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-        <text x="120" y="118" fill={dark} fontSize="22">For my love</text>
-        <text x="120" y="138" fill={dark} fontSize="16" opacity="0.7">— {letter.title}</text>
-        <text x="120" y="158" fill={dark} fontSize="13" opacity="0.55">{letter.date}</text>
-        {/* stamp */}
-        <g>
-          <rect x="290" y="14" width="50" height="60" fill={shade(c, 18)} stroke={dark} strokeWidth="0.8" strokeDasharray="2 2" />
-          <circle cx="315" cy="44" r="14" fill={wax} opacity="0.85" />
-          <text x="315" y="49" textAnchor="middle" fill="#fff3e6" fontSize="14" fontFamily="serif">♥</text>
-        </g>
+        {/* sits below the wax seal so the seal never covers it */}
+        <line x1="120" y1="154" x2="280" y2="154" stroke={dark} strokeWidth="0.6" opacity="0.4" />
+        <line x1="120" y1="174" x2="260" y2="174" stroke={dark} strokeWidth="0.6" opacity="0.4" />
+        <line x1="120" y1="193" x2="270" y2="193" stroke={dark} strokeWidth="0.6" opacity="0.4" />
+        <text x="120" y="152" fill={dark} fontSize="22">For my love</text>
+        <text x="120" y="172" fill={dark} fontSize="16" opacity="0.7">— {letter.title}</text>
+        <text x="120" y="191" fill={dark} fontSize="13" opacity="0.55">{letter.date}</text>
       </g>
 
       {/* flap — uses CSS 3D, parent has perspective */}
@@ -181,13 +201,51 @@ function EnvelopeSVG({ letter, isOpen, small = false }) {
               fill={shade(c, -5)} stroke={dark} strokeWidth="1.5" />
         <path d="M 0 0 L 180 110 L 360 0"
               fill="none" stroke={dark} strokeWidth="0.6" opacity="0.4" />
-        {/* wax seal — fades out with the address rather than popping instantly */}
-        <g transform="translate(180, 100)" style={{ opacity: isOpen ? 0 : 1, transition: "opacity 0.3s ease" }}>
-          <circle r="22" fill={wax} />
-          <circle r="22" fill={shade(wax, 15)} opacity="0.5" />
-          <circle r="18" fill="none" stroke={shade(wax, -25)} strokeWidth="1" opacity="0.6" />
-          <text textAnchor="middle" y="6" fill={shade(wax, -40)} fontSize="20" fontFamily="serif" fontStyle="italic">L</text>
+        {/* wax seal — a raised, hand-poured blob with a heart pressed in.
+            Fades out with the address rather than popping instantly */}
+        <g style={{ opacity: isOpen ? 0 : 1, transition: "opacity 0.3s ease" }}>
+          <ellipse cx="181" cy="110.5" rx="28" ry="27.5" fill={`url(#seal-shadow-${k})`} />
+          {/* the wax's thickness, then its top */}
+          <path d="M 180 84.5 C 191 83.5, 203 90.5, 205 101.5 C 207 111.5, 202 123.5, 191 129.5 C 181 134.5, 167 133.5, 159 125.5 C 151 117.5, 152 103.5, 157 95.5 C 162 87.5, 170 85.5, 180 84.5 Z"
+                fill={waxDeep} />
+          <path d="M 180 82 C 191 81, 203 88, 205 99 C 207 109, 202 121, 191 127 C 181 132, 167 131, 159 123 C 151 115, 152 101, 157 93 C 162 85, 170 83, 180 82 Z"
+                fill={`url(#seal-${k})`} />
+          {/* pressed-in ring and heart: dark edge above, light edge below */}
+          <circle cx="180" cy="105.4" r="16" fill="none" stroke={waxDeep} strokeWidth="1.4" opacity="0.6" />
+          <circle cx="180" cy="106.8" r="16" fill="none" stroke={waxHi} strokeWidth="0.9" opacity="0.55" />
+          <path d="M 180 115.8 C 172 109.8, 170 103.8, 174 100.8 C 177 98.8, 180 100.8, 180 103.8 C 180 100.8, 183 98.8, 186 100.8 C 190 103.8, 188 109.8, 180 115.8 Z"
+                fill={waxHi} opacity="0.6" />
+          <path d="M 180 115 C 172 109, 170 103, 174 100 C 177 98, 180 100, 180 103 C 180 100, 183 98, 186 100 C 190 103, 188 109, 180 115 Z"
+                fill={waxDeep} opacity="0.65" />
+          <path d="M 163 96 C 166 89, 173 86, 180 86" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" opacity="0.35" />
+          <circle cx="167" cy="92" r="1.4" fill="#ffffff" opacity="0.5" />
         </g>
+      </g>
+
+      {/* engraved stamp — stuck on top of the flap, fades with the address */}
+      <g transform="translate(276, 14)" filter={`url(#stamp-shadow-${k})`}
+         style={{ opacity: isOpen ? 0 : 1, transition: "opacity 0.3s ease" }}>
+        <rect x="0" y="0" width="62" height="46" fill="#fbf5ec" />
+        {/* perforated edge: round dots in the flap colour bite into the paper */}
+        <rect x="0" y="0" width="62" height="46" fill="none" stroke={shade(c, -5)} strokeWidth="4.6"
+              strokeDasharray="0 5.8" strokeLinecap="round" />
+        <rect x="4.5" y="4.5" width="53" height="37" fill={`url(#stamp-hatch-${k})`} stroke={waxDark} strokeWidth="0.6" />
+        <rect x="6.5" y="6.5" width="49" height="33" fill="none" stroke={waxDark} strokeWidth="0.3" opacity="0.8" />
+        <circle cx="31" cy="20" r="12.6" fill="#fbf5ec" stroke={waxDark} strokeWidth="0.8" />
+        <circle cx="31" cy="20" r="11" fill="none" stroke={wax} strokeWidth="0.35" />
+        <path d="M 31 27.4 C 24 21.9, 22.5 16.4, 26.3 14 C 28.6 12.6, 31 14, 31 16.4 C 31 14, 33.4 12.6, 35.7 14 C 39.5 16.4, 38 21.9, 31 27.4 Z"
+              fill={wax} />
+        <path d="M 26.5 16.4 C 26.8 15, 28 14.4, 29 14.6" fill="none" stroke="#ffffff" strokeWidth="0.8" strokeLinecap="round" opacity="0.6" />
+        <g fill={waxDark} fontSize="6" fontWeight="700" textAnchor="middle" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+          <text x="10" y="13">1</text>
+          <text x="52" y="13">1</text>
+        </g>
+        {/* ribbon banner with folded ends */}
+        <path d="M 13 32.5 L 7.5 34 L 10 36.25 L 7.5 38.5 L 13 40 Z" fill={waxDeep} />
+        <path d="M 49 32.5 L 54.5 34 L 52 36.25 L 54.5 38.5 L 49 40 Z" fill={waxDeep} />
+        <rect x="12" y="31.5" width="38" height="7.5" fill={waxDark} />
+        <text x="31" y="36.9" textAnchor="middle" fontSize="4.6" letterSpacing="0.9" fill="#fbf5ec"
+              style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 600 }}>С ЛЮБОВ</text>
       </g>
     </svg>
   );

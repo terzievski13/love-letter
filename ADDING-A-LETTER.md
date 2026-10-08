@@ -88,7 +88,7 @@ two commits landing at once).
 | `date` | Free text, printed on the envelope and at the top of the letter. It is **decoration only** — it does not control when the letter appears. |
 | `title` | Handwritten label on the envelope. |
 | `envelopeColor` | Paper color, hex. |
-| `wax` | Wax seal color, hex. The lighter/darker shades of the seal are worked out from this one value. |
+| `wax` | Wax seal color, hex. It also colours the engraved stamp (its shading, heart and "С ЛЮБОВ" banner), so seal and stamp always match. The lighter/darker shades are all worked out from this one value. |
 | `body` | The letter itself. `\n` starts a new line, `\n\n` leaves a blank line between paragraphs. The text reveals line by line, so short paragraphs read better than one long block. |
 | `unlockAt` | Optional. Hides the letter until a moment in time — see below. |
 | `fromApp` | Set by the writing tool on letters it made — leave it alone. |

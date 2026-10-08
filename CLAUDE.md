@@ -83,7 +83,20 @@ landscape rebuild untouched. Leave them alone.
 - The deck starts from the real screen size. It used to guess a
   laptop-sized screen until it measured, which made the envelopes appear
   too big on phones and visibly shrink (fixed 2026-10-08)
-- Handwritten font (Caveat), beautiful Fraunces serif in titles
+- Envelope art (EnvelopeSVG in envelope.jsx, chosen 2026-10-08 over six
+  rounds of designs): the original pointed flap; a raised, hand-poured
+  wax seal with a heart pressed in; the handwritten address *below* the
+  seal so nothing covers it; a wide engraved stamp ("С ЛЮБОВ" on a
+  ribbon banner) stuck on top of the flap. Seal and stamp both take the
+  letter's `wax` colour and fade out as the flap opens. Tried and turned
+  down — don't re-propose: airmail stripes / painted-scene stamp /
+  postmark, visible side and bottom folds on the back (looked strange),
+  ribbons, gold foil, twine and flowers. The seal's shadow is a gradient,
+  not an SVG filter, on purpose: the seal rides the flap's 3D rotation,
+  and Safari draws filters inside 3D-rotated content unreliably
+- Handwritten font (Caveat), beautiful Fraunces serif in titles;
+  Cormorant Garamond only for the stamp's lettering (Fraunces has no
+  Cyrillic letters)
 
 ### Her letters back to me (Oct 2026)
 - Status: the screens are confirmed good on my phone (2026-10-08). The
