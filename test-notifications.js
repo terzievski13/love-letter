@@ -220,7 +220,11 @@ const GOOD_SUB = {
   try {
     const webpush = require("web-push");
     const { generateKeyPairSync, randomBytes } = require("crypto");
-    const keys = JSON.parse(require("fs").readFileSync(path.join(__dirname, ".vapid-keys.json"), "utf8"));
+    // Kept outside the repo: http.server serves dotfiles, so a key sitting in
+    // the project root is readable by anyone on the network.
+    const keysPath = process.env.VAPID_KEYS_PATH ||
+      path.join(require("os").homedir(), ".config", "love-letter", "vapid-keys.json");
+    const keys = JSON.parse(require("fs").readFileSync(keysPath, "utf8"));
     webpush.setVapidDetails("mailto:test@example.com", keys.publicKey, keys.privateKey);
 
     // a throwaway client keypair, standing in for her browser

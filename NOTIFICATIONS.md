@@ -69,7 +69,10 @@ Things that will bite you:
 - The public VAPID key is hardcoded in `notify.jsx` because there is no
   build step and therefore no way to inject env vars into browser code.
   That is fine — it is public by design. The private half is in Vercel's
-  environment variables and in `.vapid-keys.json`, which is gitignored.
+  environment variables and in `~/.config/love-letter/vapid-keys.json`,
+  deliberately outside the repo: `python -m http.server` serves dotfiles,
+  so a key in the project root is readable by anyone on the network.
+  Override the path with `VAPID_KEYS_PATH`.
   **The repo is public**, so nothing secret may ever be committed.
 - Wording for the prompt and the notifications lives in `NOTIFY_COPY` at
   the top of `notify.jsx` and `COPY` at the top of `lib/send.js`. It is in
