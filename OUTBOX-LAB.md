@@ -5,6 +5,11 @@ her inside the mailbox. It is **not part of the site** — nothing in
 `index.html` loads it, and nothing in it is sent or saved anywhere except
 this browser.
 
+**Decided 2026-10-07: B · bundle, at 100%.** It's built for real in
+`reply.jsx` (see LETTERS-FROM-HER.md). This lab stays as a record and as a
+place to try changes. The "напиши ми" here saves nothing, so it's not where
+she writes.
+
     python3 -m http.server 8123
 
 then open <http://localhost:8123/outbox-lab.html> (or

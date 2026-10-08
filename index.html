@@ -264,6 +264,113 @@
     color: #fff3e6; font-size: 22px; line-height: 1;
   }
 
+  .writer-notify { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(120,90,60,.18); }
+  .writer-notify .writer-link[disabled] { opacity: .5; cursor: default; }
+
+  /* ---- her letters to you (reply.jsx; designed in outbox-lab.html) ---- */
+  .pill-btn {
+    position: absolute; z-index: 320;
+    padding: 10px 18px; border-radius: 999px;
+    border: 1px solid rgba(255,243,230,.3);
+    background: rgba(140,70,88,.72);
+    color: #fff3e6; font-family: Caveat, cursive; font-size: 21px; line-height: 1;
+    cursor: pointer; backdrop-filter: blur(8px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.35);
+  }
+  .pill-btn:hover { background: rgba(160,80,100,.85); }
+  .write-btn { top: 24px; right: 24px; }
+  .empty-shelf {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(320px, 80%); text-align: center; z-index: 10;
+    font-family: Caveat, cursive; color: rgba(255,243,230,.75);
+  }
+  .empty-shelf .big { font-size: 28px; color: #fff3e6; }
+  .empty-shelf .small { font-size: 19px; margin-top: 6px; }
+
+  /* the tied bundle, bottom-right of the mailbox */
+  .bundle {
+    position: absolute; right: 26px; bottom: 118px; z-index: 320;
+    width: 112px; height: 92px; cursor: pointer;
+    appearance: none; border: 0; background: transparent; padding: 0;
+    transform-origin: bottom right; transition: bottom .4s ease;
+  }
+  .bundle-env {
+    position: absolute; left: 6px; width: 100px; height: 64px; border-radius: 3px;
+    box-shadow: 0 4px 10px rgba(0,0,0,.35); transition: transform .2s ease;
+  }
+  .bundle-ribbon-v { position: absolute; left: 52px; top: 4px; width: 7px; height: 70px; background: #8c4658; border-radius: 2px; }
+  .bundle-ribbon-h { position: absolute; left: 4px; top: 36px; width: 104px; height: 6px; background: #8c4658; border-radius: 2px; }
+  .bundle-bow {
+    position: absolute; left: 44px; top: 29px; width: 23px; height: 19px;
+    font-size: 19px; line-height: 19px; text-align: center; color: #a85a6e;
+  }
+  .bundle-label {
+    position: absolute; left: -30px; right: -20px; top: 80px; text-align: center; white-space: nowrap;
+    font-family: Caveat, cursive; font-size: 19px; color: #fff3e6;
+    text-shadow: 0 1px 8px rgba(20,10,6,.8);
+  }
+  .bundle:hover .bundle-env { transform: translateY(-2px); }
+  .bundle-empty { opacity: .45; }
+
+  /* her own letter, open: edit / delete float over the reader */
+  .own-actions {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 1100;
+    display: flex; gap: 10px; animation: fadeIn .4s .9s both;
+  }
+  .own-actions button {
+    font-family: Caveat, cursive; font-size: 20px; padding: 7px 18px; border-radius: 999px;
+    white-space: nowrap; cursor: pointer; border: 1px solid rgba(255,243,230,.3);
+    background: rgba(20,10,6,.6); color: #fff3e6; backdrop-filter: blur(8px);
+  }
+  .own-actions button.danger { background: rgba(122,40,40,.7); }
+  .own-actions button[disabled] { opacity: .6; cursor: default; }
+
+  /* her writing screen */
+  .composer-wrap {
+    position: fixed; inset: 0; z-index: 1200;
+    background: rgba(12,7,4,.78); display: grid; place-items: center;
+    animation: fadeIn .35s ease both; padding: 14px;
+  }
+  .composer {
+    width: min(460px, 100%); max-height: 100%; overflow-y: auto;
+    border-radius: 6px; padding: 22px 22px 18px;
+    background:
+      repeating-linear-gradient(0deg, transparent 0, transparent 31px, rgba(120,90,60,0.13) 31px, rgba(120,90,60,0.13) 32px),
+      linear-gradient(180deg, #fdf6e9 0%, #f6e9d2 100%);
+    color: #3a2820; box-shadow: 0 30px 60px rgba(0,0,0,.5);
+    font-family: Caveat, cursive;
+  }
+  .composer h2 { margin: 0 0 10px; font-family: Fraunces, serif; font-style: italic; font-weight: 400; font-size: 22px; }
+  .composer input[type=text], .composer input[type=password], .composer textarea {
+    width: 100%; border: 0; border-bottom: 1px solid rgba(120,90,60,.35); border-radius: 0;
+    background: transparent; color: #3a2820; outline: none;
+    font-family: Caveat, cursive; font-size: 22px; padding: 4px 2px;
+  }
+  .composer textarea { min-height: 190px; resize: vertical; line-height: 32px; border: 1px dashed rgba(120,90,60,.3); border-radius: 4px; padding: 6px 8px; margin-top: 12px; }
+  .composer .row-label { font-size: 17px; color: #7a5a4a; margin: 14px 0 6px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatches button {
+    width: 30px; height: 30px; border-radius: 15px; cursor: pointer; padding: 0;
+    border: 2px solid rgba(58,40,32,.18);
+  }
+  .swatches button[data-on="1"] { border-color: #3a2820; box-shadow: 0 0 0 2px #fdf6e9 inset; }
+  .composer .preview { display: flex; justify-content: center; margin: 16px 0 6px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.25)); }
+  .composer .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+  .composer .actions button {
+    font-family: Caveat, cursive; font-size: 21px; padding: 6px 18px; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(58,40,32,.3); background: transparent; color: #3a2820;
+  }
+  .composer .actions button.primary { background: #8c4658; color: #fff3e6; border-color: #8c4658; }
+  .composer .actions button[disabled] { opacity: .4; cursor: default; }
+  .composer .hint { font-size: 17px; color: #7a5a4a; margin-top: 6px; }
+  .composer .err { font-size: 18px; color: #a5443a; margin-top: 8px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 1300;
+    font-family: Caveat, cursive; font-size: 24px; color: #fff3e6; white-space: nowrap;
+    text-shadow: 0 1px 10px rgba(20,10,6,.8); animation: fadeIn .4s ease both; pointer-events: none;
+  }
+
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes bob {
     0%,100% { transform: translateX(-50%) translateY(0); }
@@ -286,6 +393,11 @@
       transform: scale(0.8);
       transform-origin: 50% 50%;
     }
+    .bundle { bottom: 124px; right: 14px; transform: scale(.82); }
+    /* on a phone the "should I ring you?" prompt reaches the bundle - lift it */
+    .interior:has(.notify-slot > *) .bundle { bottom: 214px; }
+    .pill-btn { font-size: 18px; padding: 8px 14px; }
+    .write-btn { top: 24px; right: 16px; }
   }
 </style>
 </head>
@@ -317,6 +429,7 @@
   <script type="text/babel" src="deck.jsx"></script>
   <script type="text/babel" src="notify.jsx"></script>
   <script type="text/babel" src="writer.jsx"></script>
+  <script type="text/babel" src="reply.jsx"></script>
   <script type="text/babel" src="app.jsx"></script>
   <script type="text/babel" src="tweaks.jsx"></script>
 </body>

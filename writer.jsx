@@ -85,6 +85,50 @@ function recall(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
 }
 
+/* ---------------- your phone, told when she writes ---------------- */
+
+const WRITER_NOTIFY_ME = "mailbox:notify-me"; // this device is subscribed as yours
+
+function NotifyMe({ writerKey }) {
+  // idle | working | on | blocked | failed
+  const [state, setState] = useWS(() => (recall(WRITER_NOTIFY_ME) === "1" ? "on" : "idle"));
+  const push = window.MailboxPush;
+  if (!push || !push.supported()) return null;
+
+  async function turnOn() {
+    setState("working");
+    try {
+      const sub = await push.subscribe();
+      const res = await fetch("/api/subscribe?who=me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + writerKey },
+        body: JSON.stringify(sub),
+      });
+      if (!res.ok) throw new Error("subscribe said " + res.status);
+      remember(WRITER_NOTIFY_ME, "1");
+      setState("on");
+    } catch (err) {
+      console.warn("[mailbox] could not subscribe your phone:", err);
+      setState(err.message === "blocked" ? "blocked" : "failed");
+    }
+  }
+
+  return (
+    <div className="writer-notify">
+      {state === "on" ? (
+        // tapping again re-sends it - harmless, and heals a lost subscription
+        <button className="writer-link" onClick={turnOn}>✓ this device buzzes when she writes</button>
+      ) : (
+        <button className="writer-link" onClick={turnOn} disabled={state === "working"}>
+          {state === "working" ? "asking…" : "🔔 tell me when she writes"}
+        </button>
+      )}
+      {state === "blocked" && <div className="writer-hint">Notifications are blocked for this site — allow them in the browser settings, then try again.</div>}
+      {state === "failed" && <div className="writer-error">That didn't work — try again in a moment.</div>}
+    </div>
+  );
+}
+
 /* ---------------- the form ---------------- */
 
 function Swatches({ colors, value, onChange, label }) {
@@ -313,6 +357,7 @@ function Writer({ onClose }) {
         <div className="writer-hint writer-foot">
           The first five letters were written by hand, so they're only in letters.jsx.
         </div>
+        <NotifyMe writerKey={key} />
       </div>
     );
   } else if (view === "form") {

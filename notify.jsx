@@ -44,6 +44,26 @@ function pushSupported() {
   );
 }
 
+/* Registers the service worker, asks permission and returns this browser's
+   push subscription. Throws "blocked" if permission is refused. Shared with
+   the writing tool (writer.jsx), which subscribes YOUR phone the same way. */
+async function subscribeThisDevice() {
+  const reg = await navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.ready;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("blocked");
+
+  const existing = await reg.pushManager.getSubscription();
+  return (
+    existing ||
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    }))
+  );
+}
+
 function NotifyPrompt() {
   // hidden | asking | working | granted | blocked | failed
   const [state, setState] = useNotifyState("hidden");
@@ -99,22 +119,14 @@ function NotifyPrompt() {
   async function enable() {
     setState("working");
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
-
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
+      let sub;
+      try {
+        sub = await subscribeThisDevice();
+      } catch (err) {
+        if (err.message !== "blocked") throw err;
         setState("blocked");
         return;
       }
-
-      const existing = await reg.pushManager.getSubscription();
-      const sub =
-        existing ||
-        (await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-        }));
 
       const res = await fetch("/api/subscribe", {
         method: "POST",
@@ -190,3 +202,4 @@ function NotifyPrompt() {
 }
 
 window.NotifyPrompt = NotifyPrompt;
+window.MailboxPush = { supported: pushSupported, subscribe: subscribeThisDevice };

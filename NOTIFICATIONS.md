@@ -76,6 +76,15 @@ Things that will bite you:
   Bulgarian and deliberately never names the letter — some titles are
   spoilers.
 
+**Pushes to you, too (added 2026-10-08).** When she writes you a letter
+(LETTERS-FROM-HER.md), `api/her-letters.js` pushes to *your* phone via
+`sendPushToMe` in `lib/send.js`. Your phone lives in its own Redis hash,
+`letters:my-subs`, filled by `/api/subscribe?who=me` (needs
+`WRITER_PASSWORD`; the writer's "🔔 tell me when she writes" calls it).
+The two lists never mix: subscribing as "me" removes that phone from her
+`letters:subs`, and her plain subscribe path ignores a phone that's in
+`my-subs`. Same `sw.js`, same VAPID keys.
+
 Run `npm test` for the offline test suite (40 checks, no network, nothing
 sent): duplicate suppression, the backlog guard, simultaneous triggers,
 timed unlocks, dead-subscription pruning, delivery failure and retry, and
@@ -93,4 +102,5 @@ not the normal one), `HER_EMAIL` and `MY_EMAIL` on Vercel and redeploying.
 Environment variables (Vercel): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
 `VAPID_SUBJECT`, `NOTIFY_SECRET`, `CRON_SECRET` (same value),
 `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `HER_EMAIL`, `MY_EMAIL`, plus Upstash's
-own two. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.
+own two. Her letters add `HER_SECRET_WORD`; the writing tool adds
+`WRITER_PASSWORD` and `GITHUB_TOKEN`. `NOTIFY_SECRET` also goes in GitHub → Secrets → Actions.

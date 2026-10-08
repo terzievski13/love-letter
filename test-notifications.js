@@ -104,8 +104,10 @@ const GOOD_SUB = {
   fakeLetters = null;
   resetStore();
   let r = await callCheck("?dry=1");
-  check("parses the live file and finds all five letters", r.body.total === 5, JSON.stringify(r.body.total));
-  check("all five currently read as live", r.body.live.length === 5);
+  // counted from the real file, so a new letter never breaks these two
+  const inFile = letters.parseLettersSource(require("fs").readFileSync(path.join(__dirname, "letters.jsx"), "utf8")).letters;
+  check("parses the live file and finds every letter in it", r.body.total === inFile.length, `${r.body.total} vs ${inFile.length}`);
+  check("every letter that should be live reads as live", r.body.live.length === inFile.filter((l) => letters.isVisible(l)).length);
 
   /* ============ the backlog guard ============ */
   section("First run must not fire five letters at her at once");

@@ -24,7 +24,13 @@ function check(name, condition, detail) {
 function section(t) { results.push(`\n${t}`); }
 
 /* ---------- a fake GitHub holding one file ---------- */
-const REAL = fs.readFileSync(path.join(__dirname, "letters.jsx"), "utf8");
+const FILE_NOW = fs.readFileSync(path.join(__dirname, "letters.jsx"), "utf8");
+// start from the five hand-written letters only, so the tests don't change
+// every time a real letter is written from the app
+const REAL = (() => {
+  const data = parseLettersSource(FILE_NOW);
+  return writeLettersSource(FILE_NOW, { ...data, letters: data.letters.filter((l) => !l.fromApp) });
+})();
 const gh = { text: REAL, sha: "sha-0", puts: [], conflictsLeft: 0 };
 function resetGitHub() { gh.text = REAL; gh.sha = "sha-0"; gh.puts = []; gh.conflictsLeft = 0; }
 
@@ -65,7 +71,7 @@ const originals = parseLettersSource(REAL).letters;
 (async () => {
   /* ============ the file format ============ */
   section("Rewriting letters.jsx must not disturb anything else in it");
-  check("parse then write gives back the exact same bytes", writeLettersSource(REAL, parseLettersSource(REAL)) === REAL);
+  check("parse then write gives back the exact same bytes", writeLettersSource(FILE_NOW, parseLettersSource(FILE_NOW)) === FILE_NOW);
 
   /* ============ auth ============ */
   section("Only you can use it");

@@ -9,7 +9,7 @@ out when one arrives.
 
 ## Where the details are — check here first
 
-This file is the overview. Three companion files hold the detail, and
+This file is the overview. Four companion files hold the detail, and
 each one is the source of truth for its area. **Read the relevant file
 before changing anything in that area** — don't re-derive it from the
 code, and don't work from this summary alone:
@@ -19,6 +19,7 @@ code, and don't work from this summary alone:
 | Terrain, mountains, water, sky, sun, fog, the path, rocks, flowers, lighting, anything in three-scene.js | **LANDSCAPE.md** |
 | Push notifications or email, api/, lib/, sw.js, notify.jsx, vercel.json, .github/workflows/, the "did she get told" question | **NOTIFICATIONS.md** |
 | Writing, editing, timing or publishing a letter; letters.jsx; the secret writing tool (writer.jsx, api/write-letter.js, lib/github.js, the long-press on the mailbox) | **ADDING-A-LETTER.md** |
+| Her letters back to you: the bundle, "✎ напиши ми", the secret word, edit/delete, the push to your phone (reply.jsx, api/her-letters.js) | **LETTERS-FROM-HER.md** |
 
 Anything not in that table — the mailbox model, the camera, the letter
 animation, the React overlay — is covered below.
@@ -138,6 +139,8 @@ landscape rebuild untouched. Leave them alone.
   commits letters.jsx via GitHub (same file)
 - Notification code in api/, lib/, sw.js, notify.jsx — see
   NOTIFICATIONS.md
+- Her letters to me in reply.jsx (bundle, writing screen, edit/delete),
+  saved in Redis via api/her-letters.js — see LETTERS-FROM-HER.md
 - tweaks.jsx / tweaks-panel.jsx are a developer tweaking panel, loaded
   on every page load by index.html. Not part of the experience she
   sees; leave alone unless asked
@@ -148,5 +151,6 @@ landscape rebuild untouched. Leave them alone.
   PICKER-LAB.md
 - outbox-lab.html / outbox-lab.jsx are a design sandbox for where her
   letters to me sit next to mine (three layouts on the real deck) — not
-  loaded by the site. See OUTBOX-LAB.md
+  loaded by the site. B · bundle won and is now built in reply.jsx. See
+  OUTBOX-LAB.md
 - Use TypeScript-friendly patterns even though we're in plain JS
