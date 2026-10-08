@@ -134,7 +134,9 @@ function Reader({ letter, origin, onClose }) {
 function LetterDeck({ letters, onOpen, onClose, openLetter }) {
   const [i, setI] = useDS(0);
   const [drag, setDrag] = useDS(0);
-  const [size, setSize] = useDS({ w: 900, h: 600 });
+  // start from the real screen (the deck fills it), not a guess - a guess drew
+  // the first frame too big on phones and the envelopes visibly shrank
+  const [size, setSize] = useDS(() => ({ w: window.innerWidth, h: window.innerHeight }));
   const [origin, setOrigin] = useDS(null);
   const [readSet, setReadSet] = useDS(() => loadReadIds(letters.map((l) => l.id)));
   const boxRef = useDR(null);
