@@ -40,7 +40,8 @@ The HTTP path survives as a fallback and `lettersFrom` in the endpoint's
 response says which one was used.
 
 Files: `api/notify-check.js` (the checker), `api/subscribe.js` (public,
-stores her subscription), `lib/letters.js` `lib/store.js` `lib/send.js`,
+stores her subscription; `?who=me` stores yours), `api/her-letters.js`
+(pushes to you when she writes), `lib/letters.js` `lib/store.js` `lib/send.js`,
 `sw.js` (service worker), `notify.jsx` (the in-site prompt),
 `.github/workflows/notify.yml`, `manifest.json`, `icon-{192,512}.png`.
 
@@ -88,10 +89,13 @@ The two lists never mix: subscribing as "me" removes that phone from her
 `letters:subs`, and her plain subscribe path ignores a phone that's in
 `my-subs`. Same `sw.js`, same VAPID keys.
 
-Run `npm test` for the offline test suite (40 checks, no network, nothing
-sent): duplicate suppression, the backlog guard, simultaneous triggers,
-timed unlocks, dead-subscription pruning, delivery failure and retry, and
-the subscribe endpoint's validation.
+Run `npm test` for the offline tests (no network, nothing sent). It runs
+three suites: `test-notifications.js` (40 checks: duplicate suppression,
+the backlog guard, simultaneous triggers, timed unlocks, dead-subscription
+pruning, delivery failure and retry, the subscribe endpoint's validation),
+`test-writer.js` (the writing tool) and `test-her-letters.js` (her letters,
+and your phone's separate list). The letter-count checks read the real
+letters.jsx, so adding a letter never breaks them.
 
 **Email is not configured (confirmed 2026-10-07).** The first letter
 published from the writing tool was announced by push (2 devices, no

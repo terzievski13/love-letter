@@ -1,3 +1,7 @@
+> **History, not current.** A snapshot from 6 May 2026 — the site address,
+> the to-do list and the picker described here have all changed since.
+> CLAUDE.md is the current picture.
+
 # Session Notes — 6 May 2026
 
 ## Where we got to

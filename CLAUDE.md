@@ -1,11 +1,15 @@
 # Letters, From Me
 
 A personal one-page website for my girlfriend. A 3D interactive mailbox
-where I leave her letters over time. Hosted on Vercel at:
+where I leave her letters over time — and, since Oct 2026, where she can
+write back to me. Hosted on Vercel at:
 https://lovelettersisa.vercel.app
+(the same deployment also answers on other Vercel domains, e.g.
+mymailbox.vercel.app — push subscriptions belong to the domain they were
+made on, see NOTIFICATIONS.md)
 
-The ongoing work is adding letters over time, and making sure she finds
-out when one arrives.
+The ongoing work is adding letters over time, making sure she finds out
+when one arrives, and reading what she sends back.
 
 ## Where the details are — check here first
 
@@ -37,7 +41,13 @@ animation, the React overlay — is covered below.
     python3 -m http.server 8123
 
 then open http://localhost:8123 — no build step, so a refresh is all it
-takes to see a change. After a visual change to the scene, actually look
+takes to see a change. That server only serves files: the `api/`
+endpoints don't run locally, so her bundle shows "още нищо", her writing
+screen and the writing tool can't log in, and no push goes anywhere. To
+test those screens locally, swap `window.fetch` for a pretend server in
+the page (that's how they were checked). `npm test` runs the server code's
+offline tests (notifications, the writing tool, her letters) — nothing is
+sent or saved. After a visual change to the scene, actually look
 at it (screenshot the page) before calling it done; judging a 3D change
 by reading the code doesn't work.
 
@@ -70,7 +80,21 @@ landscape rebuild untouched. Leave them alone.
 - Tap the centre envelope → it flies to the middle, flap opens, letter
   unfolds, handwritten text appears line by line (Letter, envelope.jsx)
 - "Back to mailbox" button closes letter and returns to the same envelope
+- The deck starts from the real screen size. It used to guess a
+  laptop-sized screen until it measured, which made the envelopes appear
+  too big on phones and visibly shrink (fixed 2026-10-08)
 - Handwritten font (Caveat), beautiful Fraunces serif in titles
+
+### Her letters back to me (Oct 2026)
+- Status: the screens are confirmed good on my phone (2026-10-08). The
+  push to my phone has not yet had a real end-to-end test
+- A tied bundle bottom-right inside the mailbox opens her pile in the same
+  deck; "✎ напиши ми" (top right) is her writing screen; the secret word
+  is asked once per device; edit/delete only where the word is known
+- Her letters live in Redis, not letters.jsx; a new one pushes to my
+  phone. Full detail: LETTERS-FROM-HER.md
+- Her writing screen and my writing tool keep their paper above the
+  iPhone keyboard (the page can't scroll, so they follow the visible area)
 
 ### Camera & navigation (confirmed working)
 - Outside view: camera at [4, 2.6, 8.2] looking at [0, 1.7, 0]
@@ -149,6 +173,8 @@ landscape rebuild untouched. Leave them alone.
 - picker-lab.html / picker-lab.jsx are the design sandbox where the deck
   was chosen over three other pickers — not loaded by the site. See
   PICKER-LAB.md
+- session-notes.md is a dated snapshot from May 2026 (old site address,
+  old to-do list) — history only; this file is the current picture
 - outbox-lab.html / outbox-lab.jsx are a design sandbox for where her
   letters to me sit next to mine (three layouts on the real deck) — not
   loaded by the site. B · bundle won and is now built in reply.jsx. See

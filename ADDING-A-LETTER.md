@@ -21,6 +21,10 @@ It's on the site in about 2 minutes and her notification goes out on its
 own. An unsent new letter is kept if you close the tool by accident.
 
 Your letters from the app are listed in the tool — tap one to change it.
+At the bottom of the list, **"🔔 звънни ми, когато тя ми пише"** makes
+that phone buzz when she writes you a letter (see LETTERS-FROM-HER.md).
+On an iPhone the tool's paper moves up with the keyboard, so the field
+you're typing in is never hidden behind it.
 A letter already in her mailbox stays there when you edit it (only its
 text and colours change). The first five letters were written by hand and
 can't be changed from the tool.
@@ -33,7 +37,8 @@ the notify Action announces it. Letters made this way carry
 The tool itself is `writer.jsx`; the hold is in `three-scene.js`
 (`onMailboxLongPress`).
 
-**It needs two settings on Vercel** (Settings → Environment Variables):
+**It needs two settings on Vercel** (Settings → Environments →
+Production; redeploy after adding one):
 
 | Name | What |
 | --- | --- |

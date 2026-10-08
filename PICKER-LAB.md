@@ -7,8 +7,9 @@ A sandbox for choosing what replaces the fanned envelope spread. It is
 `deck.jsx`. The site's version differs from the lab's in a few ways
 forced by the real scene: side envelopes darken instead of turning
 see-through (the landscape showed through them), the counter and slider
-move up while the notification prompt is showing, and the open letter
-is shown at 80% on phones as it always was. The lab is kept for
+move up while the notification prompt is showing, the open letter
+is shown at 80% on phones as it always was, and it starts from the real
+screen size (a guessed size made the envelopes shrink visibly on phones). The lab is kept for
 reference; its Deck is not kept in sync with `deck.jsx`.
 
     python3 -m http.server 8123
