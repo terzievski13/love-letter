@@ -25,12 +25,25 @@ a test letter as her, check your phone buzzes and hers doesn't, delete it).
   sizes the overlay to the part of the screen above the keyboard
   (`window.visualViewport`). Only the paper moves (and glides, rather than
   jumps); the dimmed backdrop stays full-screen.
+- **Photos**: her screen has the same photo section as your writing tool
+  (`photo-editor.jsx`), in Bulgarian:
+  - she taps in the text, then **„+ снимка“**, and a `[📷 1]` marker puts
+    the polaroid there;
+  - she can drag to crop, add a caption („надпис“), use „премести тук“
+    (move to cursor), and **„виж писмото“** previews the real letter.
+
+  Her photos go to the same Blob store, through `api/letter-photo.js`, which
+  takes her word as well as your password. They're stored on her letter as
+  `photos` (see below). A photo she takes out, or one in a letter she
+  deletes, is deleted from the store, unless another letter (hers or yours)
+  still uses it. Full detail on photos: ADDING-A-LETTER.md.
 - **Edit / delete**: buttons under her open letter, but **only on a device
   that knows the word**. Delete takes two taps.
 - **Saved in Redis**, not in letters.jsx: she can't commit to GitHub, and
   her letters shouldn't sit in a public repo. Keys:
   - `letters:from-her`: a hash, id → letter JSON
-    `{id, date, title, body, envelopeColor, wax, createdAt, updatedAt}`
+    `{id, date, title, body, envelopeColor, wax, photos?, createdAt, updatedAt}`
+    (`photos` only when she added some)
   - `letters:from-her:next`: a counter. Her ids are 100000 + counter, so
     they never clash with yours (`EnvelopeSVG` needs numeric, unique ids),
     and a deleted id is never reused.

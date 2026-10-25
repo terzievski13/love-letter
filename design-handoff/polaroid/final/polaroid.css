@@ -1,0 +1,119 @@
+/* ==========================================================================
+   POLAROID: final ("A · Taped in", unfiltered)
+   Drop-in replacement for the old .pp-* rules. Nothing outside the photo
+   (paper, lines, handwriting, background) is touched.
+
+   Per print, set as inline custom properties:
+     --w     print width (everything inside scales from it)      e.g. 241px
+     --tilt  rotation of the print, keep within about ±3.5deg      e.g. -2.4deg
+     --cr    rotation of the caption, about -2deg … 0.5deg         e.g. -1.5deg
+     --tx    tape centre, keep within 47% … 53%                    e.g. 48%
+     --tr    tape angle, about -4.5deg … 3.5deg                    e.g. -3deg
+     --tl    tape length as a fraction of --w, .34 … .40           e.g. .38
+   Per letter, on any ancestor (e.g. the .paper or the viewer):
+     --wax   the letter's wax-seal colour, one hex                 e.g. #46607a
+   ========================================================================== */
+
+/* ---- placement inside the letter ---- */
+.pl-slot { display: flex; justify-content: center; align-items: flex-start; margin: 22px 0 26px; }
+.pl-slot.left  { justify-content: flex-start; padding-left: 2%; }
+.pl-slot.right { justify-content: flex-end;   padding-right: 2%; }
+/* a pair overlaps on purpose instead of just touching */
+.pl-slot.many > .pl-item:nth-child(2) { margin-left: -10%; margin-top: 8%; }
+/* the first print lies on top, so the second never covers its caption */
+.pl-slot.many > .pl-item:first-child { position: relative; z-index: 1; }
+.pl-item { display: flex; flex-direction: column; align-items: center; }
+
+/* ---- the print ---- */
+.pp {
+  /* tape = wax colour mixed 46% into white, then made see-through */
+  --tape: color-mix(in oklab, color-mix(in oklab, var(--wax, #46607a) 46%, #fff) 72%, transparent);
+  position: relative; box-sizing: border-box;
+  width: var(--w); margin: 0; flex: 0 0 auto;
+  transform: rotate(var(--tilt, 0deg));
+  cursor: pointer;
+  /* Polaroid 600 proportions: top 6.8%, sides 5%, chin 25% of the width */
+  padding: calc(var(--w) * .068) calc(var(--w) * .05) 0;
+  /* frame material: two offset dot grids = paper grain, a diagonal satin
+     sheen, and an off-white base that warms slightly toward the bottom */
+  background:
+    radial-gradient(circle, rgba(90,70,40,.06) 0 .5px, transparent 1px) 0 0 / 3px 3px,
+    radial-gradient(circle, rgba(255,255,255,.8) 0 .5px, transparent 1px) 1px 2px / 5px 4px,
+    linear-gradient(112deg, rgba(255,255,255,0) 28%, rgba(255,255,255,.55) 45%, rgba(255,255,255,0) 62%),
+    linear-gradient(180deg, #fbfaf5, #f1eee4);
+  /* lies flat: hairline edge, tight contact shadow, a hair more at the free bottom edge */
+  box-shadow:
+    0 0 0 .5px rgba(70,45,25,.16),
+    0 1px 1.5px rgba(50,30,15,.2),
+    0 calc(var(--w) * .008) calc(var(--w) * .016) rgba(50,30,15,.12),
+    0 calc(var(--w) * .022) calc(var(--w) * .028) calc(var(--w) * -.02) rgba(50,30,15,.2);
+}
+
+/* ---- the picture: square, recessed slightly into the frame, unfiltered ---- */
+.pp-img {
+  position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: #2a1d16;
+  box-shadow: 0 1px 0 rgba(255,255,255,.95); /* light catching the lower lip of the window */
+}
+.pp-img img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.pp-img::before { /* faint gloss of the print surface */
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(125deg, rgba(255,255,255,.08), rgba(255,255,255,0) 42%);
+}
+.pp-img::after { /* the window's inner edge */
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  box-shadow:
+    inset 0 calc(var(--w) * .006) calc(var(--w) * .012) rgba(0,0,0,.3),
+    inset 0 0 0 1px rgba(0,0,0,.16);
+}
+
+/* ---- caption: Caveat, but in blue-black ballpoint so it reads as written on the photo ---- */
+.pp-cap {
+  box-sizing: border-box; height: calc(var(--w) * .25);
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--w) * .012) 7% 0;
+  overflow: hidden; white-space: nowrap; line-height: 1;
+  transform: rotate(var(--cr, -1deg));
+  font-family: Caveat, cursive; font-weight: 600;
+  font-size: calc(var(--w) * .094);
+  color: #2c3a5a;
+}
+
+/* ---- washi tape: translucent, matte, fine zigzag ends ---- */
+.pp-tape {
+  position: absolute; z-index: 3;
+  left: var(--tx, 50%); top: 0;
+  width: calc(var(--w) * var(--tl, .38)); height: calc(var(--w) * .1);
+  transform: translate(-50%, -50%) rotate(var(--tr, -3deg));
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0) 16%, rgba(255,255,255,0) 84%, rgba(60,40,20,.06)),
+    repeating-linear-gradient(93deg, rgba(255,255,255,.1) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(86deg, rgba(60,40,20,.04) 0 1px, transparent 1px 9px),
+    var(--tape);
+  clip-path: polygon(
+    0 0, 100% 0,
+    97.6% 8.33%, 100% 16.67%, 97.6% 25%, 100% 33.33%, 97.6% 41.67%, 100% 50%,
+    97.6% 58.33%, 100% 66.67%, 97.6% 75%, 100% 83.33%, 97.6% 91.67%, 100% 100%,
+    0 100%,
+    2.4% 91.67%, 0 83.33%, 2.4% 75%, 0 66.67%, 2.4% 58.33%, 0 50%,
+    2.4% 41.67%, 0 33.33%, 2.4% 25%, 0 16.67%, 2.4% 8.33%);
+}
+/* iOS older than 16.2 has no color-mix(): fall back to a neutral tape */
+@supports not (color: color-mix(in oklab, red 50%, blue)) {
+  .pp { --tape: rgba(205,198,186,.72); }
+}
+
+/* ---- tapped open: same print, lifted off the page, tape comes with it ---- */
+.viewer .pp {
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.2), 0 calc(var(--w) * .03) calc(var(--w) * .09) rgba(0,0,0,.55);
+}
+@supports (color: color-mix(in oklab, red 50%, blue)) {
+  .viewer .pp-tape { /* a touch more opaque, so it reads against the dark background */
+    --tape: color-mix(in oklab, color-mix(in oklab, var(--wax, #46607a) 46%, #fff) 82%, transparent);
+  }
+}
+
+/* ---- small, peeking out of an envelope: no tape, empty chin ---- */
+.pp-cap:empty { padding: 0; }

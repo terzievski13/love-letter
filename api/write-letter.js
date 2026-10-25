@@ -8,11 +8,13 @@
                                                         change one made in the app
 
    Fields: title, body, envelopeColor, wax, unlockAt (ISO time, or null for
-   "now"). The original letters, written by hand before this existed, can
+   "now"), photos (optional: [{ src, caption, pos }], uploaded first through
+   api/letter-photo.js; a "[📷 2]" marker in the body places the second one). The original letters, written by hand before this existed, can
    never be changed from here - only ones carrying "fromApp": true. */
 
 const crypto = require("crypto");
 const github = require("../lib/github");
+const photoStore = require("../lib/photos");
 const { parseLettersSource, writeLettersSource } = require("../lib/letters");
 
 const FILE = "letters.jsx";
@@ -61,7 +63,10 @@ function cleanFields(input, now) {
     if (t > now) unlockAt = new Date(t).toISOString().replace(".000Z", "Z");
   }
 
-  return { title, body, envelopeColor: input.envelopeColor.toLowerCase(), wax: input.wax.toLowerCase(), unlockAt };
+  const photos = photoStore.cleanPhotos(input.photos);
+  if (photos.error) return photos;
+
+  return { title, body, envelopeColor: input.envelopeColor.toLowerCase(), wax: input.wax.toLowerCase(), unlockAt, photos };
 }
 
 /** Builds the letter object with keys in the same order as the hand-written ones. */
@@ -73,8 +78,10 @@ function buildLetter(id, f, now) {
     envelopeColor: f.envelopeColor,
     wax: f.wax,
     body: f.body,
-    fromApp: true,
   });
+  // only letters that have photos get the field, so the others stay as they were
+  if (f.photos && f.photos.length) letter.photos = f.photos;
+  letter.fromApp = true;
   return letter;
 }
 
@@ -154,9 +161,16 @@ module.exports = async (req, res) => {
         const letter = buildLetter(old.id, keep, now);
         if (wasLive || keep.unlockAt === (old.unlockAt || null)) letter.date = old.date;
         data.letters[i] = letter;
-        return { letter, message: `Edit letter: ${letter.title} (from the app)` };
+        // photos taken out of this letter, and not used by any other, can go
+        const inUse = photoStore.photosIn(data.letters);
+        const removed = (old.photos || []).map((p) => p.src).filter((src) => !inUse.has(src));
+        return { letter, removed, message: `Edit letter: ${letter.title} (from the app)` };
       });
       if (out.error) return res.status(out.status || 400).json({ ok: false, error: out.error });
+      if (out.removed.length) {
+        // the letter is already saved; a photo that fails to delete only takes up space
+        try { await photoStore.remove(out.removed); } catch (err) { console.warn("[write-letter] couldn't delete photos:", err.message); }
+      }
       return res.status(200).json({ ok: true, ...out });
     }
 
@@ -167,3 +181,4 @@ module.exports = async (req, res) => {
 };
 
 module.exports.displayDate = displayDate;
+module.exports.authorised = authorised;  // shared with api/letter-photo.js

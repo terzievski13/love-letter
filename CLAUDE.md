@@ -22,7 +22,7 @@ code, and don't work from this summary alone:
 | --- | --- |
 | Terrain, mountains, water, sky, sun, fog, the path, rocks, flowers, lighting, anything in three-scene.js | **LANDSCAPE.md** |
 | Push notifications or email, api/, lib/, sw.js, notify.jsx, vercel.json, .github/workflows/, the "did she get told" question | **NOTIFICATIONS.md** |
-| Writing, editing, timing or publishing a letter; letters.jsx; the secret writing tool (writer.jsx, api/write-letter.js, lib/github.js, the long-press on the mailbox) | **ADDING-A-LETTER.md** |
+| Writing, editing, timing or publishing a letter; letters.jsx; the secret writing tool (writer.jsx, api/write-letter.js, lib/github.js, the long-press on the mailbox); photos in letters (photos.jsx, api/letter-photo.js, lib/photos.js, the Blob store) | **ADDING-A-LETTER.md** |
 | Her letters back to you: the bundle, "✎ напиши ми", the secret word, edit/delete, the push to your phone (reply.jsx, api/her-letters.js) | **LETTERS-FROM-HER.md** |
 
 Anything not in that table — the mailbox model, the camera, the letter
@@ -46,8 +46,8 @@ endpoints don't run locally, so her bundle shows "още нищо", her writing
 screen and the writing tool can't log in, and no push goes anywhere. To
 test those screens locally, swap `window.fetch` for a pretend server in
 the page (that's how they were checked). `npm test` runs the server code's
-offline tests (notifications, the writing tool, her letters) — nothing is
-sent or saved. After a visual change to the scene, actually look
+offline tests (notifications, the writing tool, her letters, photos) —
+nothing is sent or saved. After a visual change to the scene, actually look
 at it (screenshot the page) before calling it done; judging a 3D change
 by reading the code doesn't work.
 
@@ -108,6 +108,22 @@ landscape rebuild untouched. Leave them alone.
   phone. Full detail: LETTERS-FROM-HER.md
 - Her writing screen and my writing tool keep their paper above the
   iPhone keyboard (the page can't scroll, so they follow the visible area)
+
+### Photos in letters (Oct 2026)
+- Status: built 2026-10-26, checked in headless Chrome at laptop and
+  phone size. Not yet confirmed on a real phone, and it needs the Vercel
+  Blob store connected before uploads work
+- Polaroids taped onto the paper ("A · Taped in", chosen in
+  photo-lab.html and then refined in Claude Design). Tap one for full screen;
+  swipe through the rest. Look: photos.jsx + the "photos in a letter" CSS
+  in index.html
+- Added in the writing tool, and on her writing screen too (in
+  Bulgarian): "+ photo" at the cursor puts a `[📷 1]` marker there, and the
+  polaroid sits on that spot. Photos are shrunk on the
+  phone and stored in Vercel Blob, not the repo. Full detail:
+  ADDING-A-LETTER.md
+- A letter without photos renders exactly as before (checked pixel for
+  pixel against the previous commit)
 
 ### Camera & navigation (confirmed working)
 - Outside view: camera at [4, 2.6, 8.2] looking at [0, 1.7, 0]
@@ -188,6 +204,12 @@ landscape rebuild untouched. Leave them alone.
   PICKER-LAB.md
 - session-notes.md is a dated snapshot from May 2026 (old site address,
   old to-do list) — history only; this file is the current picture
+- Photos in letters in photos.jsx (the polaroid, where photos go on the
+  paper, the full-screen viewer); adding them while writing in
+  photo-editor.jsx (shared by writer.jsx and reply.jsx); uploads through
+  api/letter-photo.js and lib/photos.js — see ADDING-A-LETTER.md
+- photo-lab.html / photo-lab.jsx are the design sandbox where the polaroid
+  was chosen — not loaded by the site. See PHOTO-LAB.md
 - outbox-lab.html / outbox-lab.jsx are a design sandbox for where her
   letters to me sit next to mine (three layouts on the real deck) — not
   loaded by the site. B · bundle won and is now built in reply.jsx. See

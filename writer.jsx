@@ -165,7 +165,7 @@ function tomorrowAtNine() {
   return { date, time: "09:00" };
 }
 
-function LetterForm({ initial, onPublish, onBack, busy, error }) {
+function LetterForm({ initial, onPublish, onBack, busy, error, writerKey }) {
   const isNew = !initial;
   const draft = isNew ? (() => { try { return JSON.parse(recall(WRITER_DRAFT) || "null"); } catch (e) { return null; } })() : null;
   const start = initial || draft || {};
@@ -180,21 +180,27 @@ function LetterForm({ initial, onPublish, onBack, busy, error }) {
   const [day, setDay] = useWS(startAt ? startAt.date : tomorrowAtNine().date);
   const [time, setTime] = useWS(startAt ? startAt.time : tomorrowAtNine().time);
   const [sure, setSure] = useWS(false);
+  const [peek, setPeek] = useWS(false);
+  // photos, and their [📷 1] markers in the text (photo-editor.jsx)
+  const ed = window.PhotoEditing.use({
+    initial: start.photos, body, setBody, auth: "Bearer " + writerKey, copy: window.PhotoEditing.COPY.en,
+  });
 
   // keep an unsent new letter safe if the tool is closed by accident
   useWE(() => {
-    if (isNew) remember(WRITER_DRAFT, JSON.stringify({ title, body, envelopeColor: paper, wax }));
-  }, [isNew, title, body, paper, wax]);
+    if (isNew) remember(WRITER_DRAFT, JSON.stringify({ title, body, envelopeColor: paper, wax, photos: ed.kept }));
+  }, [isNew, title, body, paper, wax, ed.photos]);
 
-  useWE(() => { setSure(false); }, [title, body, paper, wax, when, day, time]);
+  useWE(() => { setSure(false); }, [title, body, paper, wax, when, day, time, ed.photos]);
 
   const at = when === "later" && day && time ? sofiaToInstant(day, time) : null;
   const atInPast = at !== null && at <= Date.now();
-  const ready = title.trim() && body.trim() && !atInPast && !busy;
+  const ready = title.trim() && body.trim() && !atInPast && !busy && !ed.uploading && !ed.failed;
 
   // sending straight away notifies her within minutes, so it takes two taps
   const needsConfirm = !live && when === "now";
   const buttonText = busy ? "saving…"
+    : ed.uploading ? "waiting for the photos…"
     : live ? "save changes"
     : when === "later" ? (isNew ? "schedule it" : "save")
     : sure ? "tap again to send it now" : "send it now";
@@ -203,9 +209,21 @@ function LetterForm({ initial, onPublish, onBack, busy, error }) {
     if (!ready) return;
     if (needsConfirm && !sure) { setSure(true); return; }
     onPublish({
-      title, body, envelopeColor: paper, wax,
+      title, envelopeColor: paper, wax,
       unlockAt: at !== null ? new Date(at).toISOString() : null,
+      ...ed.forLetter(),   // the text with its markers numbered in order, and the photos
     });
+  }
+
+  function peekLetter() {
+    return {
+      id: initial ? initial.id : 99997,
+      date: initial ? initial.date : new Intl.DateTimeFormat("en-US", {
+        month: "short", day: "numeric", year: "numeric", timeZone: "Europe/Sofia",
+      }).format(at !== null ? new Date(at) : new Date()),
+      title, envelopeColor: paper, wax,
+      ...ed.forLetter(true),
+    };
   }
 
   const preview = { id: 99998, title: title.trim() || "…", date: "", envelopeColor: paper, wax };
@@ -220,8 +238,14 @@ function LetterForm({ initial, onPublish, onBack, busy, error }) {
       <input className="writer-input writer-hand" placeholder="title" value={title}
              onChange={(e) => setTitle(e.target.value)} maxLength={120} />
       <textarea className="writer-input writer-hand writer-body" placeholder="write to her…"
-                value={body} onChange={(e) => setBody(e.target.value)} />
+                value={body} onChange={(e) => { setBody(e.target.value); ed.trackCaret(e); }}
+                onSelect={ed.trackCaret} onKeyUp={ed.trackCaret} onClick={ed.trackCaret} onBlur={ed.trackCaret} />
       <div className="writer-hint">An empty line between paragraphs — the text appears line by line.</div>
+
+      <div className="writer-row">
+        <div className="writer-label">photos</div>
+        <window.PhotoEditing.Editor ed={ed} body={body} variant="writer" onPreview={() => setPeek(true)} />
+      </div>
 
       <Swatches label="envelope" colors={WRITER_PAPERS} value={paper} onChange={setPaper} />
       <Swatches label="wax seal" colors={WRITER_WAXES} value={wax} onChange={setWax} />
@@ -259,6 +283,8 @@ function LetterForm({ initial, onPublish, onBack, busy, error }) {
           {buttonText}
         </button>
       </div>
+
+      {peek && <window.PhotoEditing.Peek letter={peekLetter()} back={ed.copy.back} onClose={() => setPeek(false)} />}
     </div>
   );
 }
@@ -373,7 +399,7 @@ function Writer({ onClose }) {
     );
   } else if (view === "form") {
     content = (
-      <LetterForm key={editing ? editing.id : "new"} initial={editing} busy={busy} error={error}
+      <LetterForm key={editing ? editing.id : "new"} initial={editing} busy={busy} error={error} writerKey={key}
                   onPublish={publish} onBack={() => { setError(""); setView("list"); }} />
     );
   } else if (view === "done") {

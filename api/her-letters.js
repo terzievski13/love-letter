@@ -8,13 +8,19 @@
      { "action": "update", "id": 100001, "letter": { ...fields } }
      { "action": "delete", "id": 100001 }
 
-   Fields: title, body, envelopeColor, wax. The word is HER_SECRET_WORD;
-   capitals and spaces don't matter. Edits and deletes are silent - only a
-   new letter tells you. */
+   Fields: title, body, envelopeColor, wax, photos (optional, the same as
+   yours: [{ src, caption, pos }], uploaded first through api/letter-photo.js;
+   a "[📷 2]" marker in the body places the second one). The word is
+   HER_SECRET_WORD; capitals and spaces don't matter. Edits and deletes are
+   silent - only a new letter tells you. A photo taken out of a letter, or in
+   a letter she deletes, is deleted from the photo store too, unless another
+   letter (hers or yours) still uses it. */
 
 const crypto = require("crypto");
 const store = require("../lib/store");
 const send = require("../lib/send");
+const photoStore = require("../lib/photos");
+const { fetchLetters } = require("../lib/letters");
 
 const WRONG_WORD_DELAY = 1200; // slows down anyone guessing
 const MAX_TITLE = 120;
@@ -22,6 +28,13 @@ const MAX_BODY = 30000;
 const MAX_LETTERS = 500;       // years of letters; a cap keeps junk out
 const HEX = /^#[0-9a-fA-F]{6}$/;   // envelope.jsx's shade() needs all six digits
 const SITE_URL = "https://lovelettersisa.vercel.app/";
+// what's wrong with a photo, said to her
+const PHOTO_ERRORS = {
+  list: "снимките не са наред",
+  tooMany: `най-много ${photoStore.MAX_PHOTOS} снимки в едно писмо`,
+  src: "една от снимките не се е качила",
+  caption: `надписът на снимка е над ${photoStore.MAX_CAPTION} знака`,
+};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -61,8 +74,37 @@ function cleanFields(input) {
   if (body.length > MAX_BODY) return { error: `писмото е над ${MAX_BODY} знака` };
   if (!HEX.test(input.envelopeColor || "")) return { error: "непознат цвят на плика" };
   if (!HEX.test(input.wax || "")) return { error: "непознат цвят на восъка" };
-  return { title, body, envelopeColor: input.envelopeColor.toLowerCase(), wax: input.wax.toLowerCase() };
+  const photos = photoStore.cleanPhotos(input.photos, PHOTO_ERRORS);
+  if (photos.error) return photos;
+  return { title, body, envelopeColor: input.envelopeColor.toLowerCase(), wax: input.wax.toLowerCase(), photos };
 }
+
+/** The letter as stored: only one that has photos gets the field. */
+function withPhotos(letter, photos) {
+  const out = { ...letter };
+  delete out.photos;
+  if (photos.length) out.photos = photos;
+  return out;
+}
+
+/* Deletes photos that left her letters, unless a letter still uses them -
+   one of hers, or one of yours (the letters.jsx this deployment carries).
+   Never allowed to fail her save: a photo left behind only takes up space. */
+async function dropUnused(srcs) {
+  if (!srcs.length) return;
+  try {
+    const used = photoStore.photosIn(await store.listHers());
+    let mine = [];
+    try { mine = await fetchLetters(); } catch (e) { return; } // can't check yours - keep them
+    photoStore.photosIn(mine).forEach((src) => used.add(src));
+    const unused = srcs.filter((src) => !used.has(src));
+    if (unused.length) await photoStore.remove(unused);
+  } catch (err) {
+    console.warn("[her-letters] couldn't delete photos:", err.message);
+  }
+}
+
+const srcsOf = (letter) => (letter && Array.isArray(letter.photos) ? letter.photos.map((p) => p.src) : []);
 
 const forClient = (l) => ({ ...l, fromHer: true });
 
@@ -130,13 +172,14 @@ module.exports = async (req, res) => {
         return res.status(429).json({ ok: false, error: "пощенската кутия е пълна" });
       }
       const now = Date.now();
-      const letter = {
+      const { photos, ...fields } = f;
+      const letter = withPhotos({
         id: await store.nextHerId(),
         date: displayDate(now),
-        ...f,
+        ...fields,
         createdAt: new Date(now).toISOString(),
         updatedAt: new Date(now).toISOString(),
-      };
+      }, photos);
       await store.saveHer(letter);
       const told = await tellMe(letter);
       return res.status(200).json({ ok: true, letter: forClient(letter), letters: await allLetters(), told });
@@ -148,14 +191,19 @@ module.exports = async (req, res) => {
       const f = cleanFields(input.letter);
       if (f.error) return res.status(400).json({ ok: false, error: f.error });
       // keeps its id, date and createdAt; edits are silent
-      const letter = { ...existing, ...f, updatedAt: new Date().toISOString() };
+      const { photos, ...fields } = f;
+      const letter = withPhotos({ ...existing, ...fields, updatedAt: new Date().toISOString() }, photos);
       await store.saveHer(letter);
+      const kept = new Set(srcsOf(letter));
+      await dropUnused(srcsOf(existing).filter((src) => !kept.has(src)));
       return res.status(200).json({ ok: true, letter: forClient(letter), letters: await allLetters() });
     }
 
     if (input.action === "delete") {
+      const before = await store.getHer(Number(input.id));
       const gone = await store.deleteHer(Number(input.id));
       if (!gone) return res.status(404).json({ ok: false, error: "няма такова писмо" });
+      await dropUnused(srcsOf(before));
       return res.status(200).json({ ok: true, letters: await allLetters() });
     }
 
@@ -164,3 +212,5 @@ module.exports = async (req, res) => {
     return res.status(500).json({ ok: false, error: err.message });
   }
 };
+
+module.exports.authorised = authorised;  // shared with api/letter-photo.js

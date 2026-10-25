@@ -262,6 +262,12 @@ function Letter({ letter, onClose }) {
   }, []);
 
   const lines = letter.body.split("\n");
+  // photos (photos.jsx) only come into it when the letter has some
+  const photos = window.letterPhotos ? window.letterPhotos(letter) : [];
+  const layout = photos.length ? window.layoutPhotos(lines, photos) : null;
+  const photosAt = layout && layout.at;
+  const [viewing, setViewing] = useState(null);
+  const colW = Math.min(440, window.innerWidth * 0.88) - 96;
 
   return (
     <div style={{
@@ -311,23 +317,37 @@ function Letter({ letter, onClose }) {
           opacity: phase >= 3 ? 1 : 0,
           transition: "opacity 0.5s",
           whiteSpace: "pre-wrap",
-          overflowY: "auto"
+          overflowY: "auto",
+          // with photos the margins become padding, so a tilted print and its
+          // tape aren't clipped at the edge of the writing area
+          ...(photosAt && { inset: 0, padding: "44px 48px", overflowX: "hidden", "--wax": letter.wax })
         }}>
           <div style={{ fontFamily: "Caveat, cursive", fontSize: 14, color: "#7a5a4a", marginBottom: 14, letterSpacing: 1 }}>
             {letter.date}
           </div>
           {lines.map((line, i) => (
-            <div key={i} style={{
-              opacity: phase >= 3 ? 1 : 0,
-              transform: phase >= 3 ? "translateY(0)" : "translateY(6px)",
-              transition: `opacity 0.5s ${0.1 + i * 0.15}s, transform 0.5s ${0.1 + i * 0.15}s`,
-              minHeight: line === "" ? 16 : "auto"
-            }}>
-              {line || "\u00A0"}
-            </div>
+            <React.Fragment key={i}>
+              {/* a line that was only photo markers draws just its photos */}
+              {(!layout || layout.text[i] !== null) && <div style={{
+                opacity: phase >= 3 ? 1 : 0,
+                transform: phase >= 3 ? "translateY(0)" : "translateY(6px)",
+                transition: `opacity 0.5s ${0.1 + i * 0.15}s, transform 0.5s ${0.1 + i * 0.15}s`,
+                minHeight: line === "" ? 16 : "auto"
+              }}>
+                {(layout ? layout.text[i] : line) || "\u00A0"}
+              </div>}
+              {photosAt && photosAt[i] && photosAt[i].map((group) => (
+                <window.PhotoSlot key={group.k} group={group} colW={colW} show={phase >= 3}
+                                  delay={0.25 + i * 0.15} onPick={setViewing} />
+              ))}
+            </React.Fragment>
           ))}
         </div>
       </div>
+
+      {viewing !== null && (
+        <window.PhotoViewer photos={photos} start={viewing} wax={letter.wax} onClose={() => setViewing(null)} />
+      )}
 
       {/* close button */}
       {phase >= 2 && (

@@ -36,6 +36,8 @@ const HER_COPY = {
   cancel: "отказ",
   sending: "изпращам…",
   saving: "запазвам…",
+  photos: "снимки",
+  photosWait: "чакам снимките…",
   // the secret word, asked once per device
   wordTitle: "само за нас двамата",
   wordHint: "кажи тайната дума и повече няма да питам",
@@ -254,11 +256,18 @@ function HerComposer({ initial, onDone, onCancel }) {
   const [wax, setWax] = useRS(start.wax || HER_WAXES[4]);
   const [busy, setBusy] = useRS(false);
   const [error, setError] = useRS("");
+  const [peek, setPeek] = useRS(false);
+  // photos, and their [📷 1] markers in the text (photo-editor.jsx); the
+  // word travels URI-encoded, like everything else she sends
+  const ed = window.PhotoEditing.use({
+    initial: start.photos, body, setBody,
+    auth: "Bearer " + encodeURIComponent(word), copy: window.PhotoEditing.COPY.bg,
+  });
 
   // keep an unsent new letter safe if the screen is closed by accident
   useRE(() => {
-    if (isNew) herRemember(HER_DRAFT, JSON.stringify({ title, body, envelopeColor: paper, wax }));
-  }, [isNew, title, body, paper, wax]);
+    if (isNew) herRemember(HER_DRAFT, JSON.stringify({ title, body, envelopeColor: paper, wax, photos: ed.kept }));
+  }, [isNew, title, body, paper, wax, ed.photos]);
 
   async function tryWord() {
     if (!typed.trim() || busy) return;
@@ -275,9 +284,9 @@ function HerComposer({ initial, onDone, onCancel }) {
   }
 
   async function submit() {
-    if (!title.trim() || !body.trim() || busy) return;
+    if (!ready) return;
     setBusy(true); setError("");
-    const letter = { title: title.trim(), body, envelopeColor: paper, wax };
+    const letter = { title: title.trim(), envelopeColor: paper, wax, ...ed.forLetter() };
     const r = await herApi(word, initial
       ? { action: "update", id: initial.id, letter }
       : { action: "create", letter });
@@ -304,7 +313,16 @@ function HerComposer({ initial, onDone, onCancel }) {
     envelopeColor: paper,
     wax,
   };
-  const ready = title.trim() && body.trim() && !busy;
+  const ready = title.trim() && body.trim() && !busy && !ed.uploading && !ed.failed;
+
+  const peekLetter = () => ({
+    id: initial ? initial.id : 99996,
+    date: initial ? initial.date : new Intl.DateTimeFormat("en-US", {
+      month: "short", day: "numeric", year: "numeric", timeZone: "Europe/Sofia",
+    }).format(new Date()),
+    title: title.trim(), envelopeColor: paper, wax,
+    ...ed.forLetter(true),
+  });
 
   return (
     // stopPropagation keeps the deck's arrow keys (and the open letter's
@@ -333,7 +351,12 @@ function HerComposer({ initial, onDone, onCancel }) {
           <h2>{initial ? HER_COPY.editTitle : HER_COPY.composeTitle}</h2>
           <input type="text" placeholder={HER_COPY.titlePlaceholder} value={title} maxLength={120}
                  onChange={(e) => setTitle(e.target.value)} />
-          <textarea placeholder={HER_COPY.bodyPlaceholder} value={body} onChange={(e) => setBody(e.target.value)} />
+          <textarea placeholder={HER_COPY.bodyPlaceholder} value={body}
+                    onChange={(e) => { setBody(e.target.value); ed.trackCaret(e); }}
+                    onSelect={ed.trackCaret} onKeyUp={ed.trackCaret} onClick={ed.trackCaret} onBlur={ed.trackCaret} />
+
+          <div className="row-label">{HER_COPY.photos}</div>
+          <window.PhotoEditing.Editor ed={ed} body={body} variant="composer" onPreview={() => setPeek(true)} />
 
           <HerSwatches label={HER_COPY.paper} colors={HER_PAPERS} value={paper} onChange={setPaper} />
           <HerSwatches label={HER_COPY.wax} colors={HER_WAXES} value={wax} onChange={setWax} />
@@ -346,9 +369,12 @@ function HerComposer({ initial, onDone, onCancel }) {
           <div className="actions">
             <button onClick={onCancel} disabled={busy}>{HER_COPY.cancel}</button>
             <button className="primary" disabled={!ready} onClick={submit}>
-              {busy ? (initial ? HER_COPY.saving : HER_COPY.sending) : initial ? HER_COPY.save : HER_COPY.send}
+              {busy ? (initial ? HER_COPY.saving : HER_COPY.sending)
+                : ed.uploading ? HER_COPY.photosWait
+                : initial ? HER_COPY.save : HER_COPY.send}
             </button>
           </div>
+          {peek && <window.PhotoEditing.Peek letter={peekLetter()} back={ed.copy.back} onClose={() => setPeek(false)} />}
         </div>
       )}
       </div>

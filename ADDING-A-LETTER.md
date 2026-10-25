@@ -20,6 +20,43 @@ letters list in **letters.jsx**:
 It's on the site in about 2 minutes and her notification goes out on its
 own. An unsent new letter is kept if you close the tool by accident.
 
+### Photos
+
+A letter can carry any number of photos (up to 20). In the letter they
+are polaroids taped onto the paper, tilted a little, with a handwritten
+caption, and she can tap one to see it full screen and swipe through the rest.
+Her writing screen has exactly the same photo section, in Bulgarian, so
+her letters to you can carry photos too (see LETTERS-FROM-HER.md). Both
+screens share it from `photo-editor.jsx`.
+
+1. **Tap in the text where a photo belongs**, then **+ photo** and pick one
+   or several. Each one gets a marker like `[📷 1]` on its own line at that
+   spot, which is where its polaroid will sit. A tap in the middle of a word
+   moves on to the end of the word, so a sentence isn't cut in half.
+2. **Two markers on one line** (`[📷 2] [📷 3]`) become an overlapping pair.
+3. Under each thumbnail:
+   - **drag the photo** to choose what the square shows (polaroids are
+     square, so the top/bottom or the sides of the photo are cut off);
+   - type a **caption** (optional, a few words);
+   - **move to cursor** puts it wherever you last tapped in the text;
+   - **×** removes it.
+4. A photo without a marker (you deleted it, or picked one before tapping
+   in the text) still goes in. It's spread between paragraphs, never after
+   the signature.
+5. **preview the letter** opens the real letter, exactly as she'll see it.
+
+Numbers always follow the order the photos appear in the text, so they
+may change as you move things. That's expected. Each photo is shrunk on
+the phone to about 400 KB before it's uploaded, and the send button
+waits until every upload has finished. If one fails, tap it to try again.
+
+The photos live in **Vercel Blob** (the project's Storage tab), not in
+the repo. Removing a photo from a sent letter deletes it from there when
+the edit is saved. A photo that any letter still uses is never deleted.
+The free plan holds 1 GB, roughly 16 years at a weekly letter with three
+photos. Going over doesn't cost anything, but Vercel switches the photo
+storage off, so keep an eye on usage in the Storage tab.
+
 Your letters from the app are listed in the tool — tap one to change it.
 At the bottom of the list, **"🔔 звънни ми, когато тя ми пише"** makes
 that phone buzz when she writes you a letter (see LETTERS-FROM-HER.md).
@@ -48,6 +85,13 @@ Production; redeploy after adding one):
 Without them the tool stays locked (it answers "not set on Vercel"), so
 nothing breaks.
 
+**Photos also need a Blob store connected to the project** (Storage tab →
+Create → Blob → connect to this project, **Public** access). Connecting it
+adds `BLOB_READ_WRITE_TOKEN` (or `BLOB_STORE_ID` on newer stores) on its
+own; redeploy afterwards. Without it, "+ photo" answers "no photo store
+yet", and everything else works as before. Uploads go through
+`api/letter-photo.js` (`lib/photos.js` talks to the store).
+
 **⚠ After the tool has published something, run `git pull` before
 editing letters.jsx by hand** — GitHub has a newer copy than your laptop.
 If you forget, `git push` refuses and tells you to pull; do that, and
@@ -55,7 +99,8 @@ it's fine.
 
 `npm test` checks the tool's back end offline (`test-writer.js`: the
 password, the file staying byte-identical, only app letters editable,
-two commits landing at once).
+two commits landing at once; `test-photos.js`: uploads, the photo field,
+deleting only unused photos, and where markers put each photo).
 
 ## By hand
 
@@ -91,7 +136,36 @@ two commits landing at once).
 | `wax` | Wax seal color, hex. It also colours the engraved stamp (its shading, heart and "С ЛЮБОВ" banner), so seal and stamp always match. The lighter/darker shades are all worked out from this one value. |
 | `body` | The letter itself. `\n` starts a new line, `\n\n` leaves a blank line between paragraphs. The text reveals line by line, so short paragraphs read better than one long block. |
 | `unlockAt` | Optional. Hides the letter until a moment in time — see below. |
+| `photos` | Optional. Polaroids on the paper — see "Photos by hand" below. |
 | `fromApp` | Set by the writing tool on letters it made — leave it alone. |
+
+### Photos by hand
+
+The easy way is the writing tool. By hand it looks like this:
+
+```json
+"body": "Първи ред.\n[📷 1]\n\nВтори абзац.\n[📷 2] [📷 3]",
+"photos": [
+  { "src": "https://….public.blob.vercel-storage.com/letters/photo-x1.jpg", "caption": "нашата неделя" },
+  { "src": "photos/lake.jpg", "pos": "62% 50%" },
+  { "src": "photos/bench.jpg" }
+]
+```
+
+- `src` is any web address, or a file in the repo (keep it small, around
+  400 KB, about 1600px on the long side).
+- `caption` is optional: a few words on the polaroid's white strip.
+- `pos` is optional and moves the square crop: `"0% 50%"` keeps the left
+  edge, `"100% 50%"` the right, `"50% 0%"` the top.
+- `[📷 2]` in the body puts the second photo on that spot (`[снимка 2]` and
+  `[photo 2]` work too). Two on one line make a pair. A photo without a
+  marker is spread between paragraphs on its own.
+
+A photo shows up as a polaroid only if the letter has a `photos` list. A
+letter without one looks exactly as it always did. The look itself (the
+polaroid, its tape and the full-screen view) is in `photos.jsx` and the
+"photos in a letter" CSS in `index.html`. See PHOTO-LAB.md for how it was
+chosen.
 
 ### Making a letter appear later
 

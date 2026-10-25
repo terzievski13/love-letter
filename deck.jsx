@@ -166,6 +166,13 @@ function LetterDeck({ letters, onOpen, onClose, openLetter }) {
 
   const goTo = (v) => setI(clamp(v));
 
+  // fetch the photos of the centred letter and its neighbours ahead of time,
+  // so they're already on the paper when it unfolds (photos.jsx)
+  useDE(() => {
+    if (!window.preloadLetterPhotos) return;
+    [cur, cur - 1, cur + 1].forEach((k) => letters[k] && window.preloadLetterPhotos(letters[k]));
+  }, [cur, letters]);
+
   function open(letter, el) {
     setOrigin(el ? el.getBoundingClientRect() : null);
     setReadSet((prev) => {
